@@ -42,8 +42,20 @@ Expected flow:
 1. User activates Ranting Mode.
 2. User writes multiple rant segments.
 3. App stores each segment in order.
-4. User ends Ranting Mode.
-5. App generates one finished diplomatic response from all segments.
+4. User can review and remove individual segments.
+5. User ends Ranting Mode or presses Generate.
+6. App generates one finished diplomatic response from all segments.
+
+Prototype design decisions:
+
+- Standard Mode and Ranting Mode live in a two-option segmented control.
+- Ranting Mode keeps the current textarea focused on only one thought at a time.
+- Added segments appear immediately in a compact queue.
+- The app should support a keyboard shortcut for quickly saving a segment.
+- The app should not show a polished result until the user presses Generate.
+- Pressing Generate in Ranting Mode should include the current unsaved segment.
+- Switching from Standard Mode to Ranting Mode should preserve existing text as the first segment.
+- Switching from Ranting Mode back to Standard Mode should concatenate saved segments into the textarea.
 
 Important behavior:
 
