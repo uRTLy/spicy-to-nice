@@ -24,6 +24,13 @@ export type Provider =
   | "gemini"
   | "anthropic";
 
+export interface ProviderConfig {
+  provider: Provider;
+  label: string;
+  requiresApiKey: boolean;
+  implemented: boolean;
+}
+
 export interface GenerateFeedbackInput {
   segments: string[];
   mode: FeedbackMode;
@@ -57,6 +64,8 @@ Provider-specific implementation details should live behind adapters:
 
 The prompt builder should be separate from both the UI and provider adapters.
 
+The first working adapter is OpenAI. Gemini and Anthropic should keep the same interface and can be added without changing UI state shape.
+
 ## Prompt Builder Responsibilities
 
 The prompt builder should:
@@ -88,3 +97,11 @@ Expected client-side errors:
 - Unsupported provider.
 - Provider request failure.
 - Provider response missing usable text.
+
+## Browser BYOK Rules
+
+- Keep API keys in memory-only React state.
+- Do not save keys to localStorage, sessionStorage, cookies, IndexedDB, or URLs.
+- Do not log keys.
+- Do not include keys in displayed errors.
+- Keep provider request code isolated in adapter modules for easier review.

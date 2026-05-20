@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
 import type { Audience, FeedbackMode, Provider, Tone } from "./feedbackTypes";
 
 const audiences: Array<{ label: string; value: Audience }> = [
@@ -15,44 +16,19 @@ const tones: Array<{ label: string; value: Tone }> = [
   { label: "Concise", value: "concise" },
 ];
 
-const providers: Array<{ label: string; value: Provider }> = [
-  { label: "OpenAI", value: "openai" },
-  { label: "Gemini", value: "gemini" },
-  { label: "Anthropic", value: "anthropic" },
-];
-
-function polishPreview(
-  segments: string[],
-  audience: Audience,
-  tone: Tone,
-): string {
-  const text = segments.join(" ").trim();
-
-  if (!text) {
-    return "Your polished feedback will appear here.";
-  }
-
-  const audienceLabel = audiences.find((item) => item.value === audience)?.label;
-  const toneLabel = tones.find((item) => item.value === tone)?.label;
-
-  return [
-    `${audienceLabel}, I want to share feedback in a ${toneLabel?.toLowerCase()} way.`,
-    "The current situation is creating friction, and I think it would help to address the underlying issue directly.",
-    `Core concern: ${text}`,
-    "Could we agree on a clearer next step so this is easier to handle going forward?",
-  ].join("\n\n");
-}
-
 export function App() {
   const [mode, setMode] = useState<FeedbackMode>("single");
   const [audience, setAudience] = useState<Audience>("manager");
   const [tone, setTone] = useState<Tone>("diplomatic");
   const [provider, setProvider] = useState<Provider>("openai");
+  const [apiKey, setApiKey] = useState("");
   const [draft, setDraft] = useState("");
   const [segments, setSegments] = useState<string[]>([]);
   const [generatedOutput, setGeneratedOutput] = useState(
     "Your polished feedback will appear here.",
   );
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const activeSegments = useMemo(() => {
     if (mode === "ranting") {
@@ -63,8 +39,12 @@ export function App() {
   }, [draft, mode, segments]);
 
   const canAddSegment = draft.trim().length > 0;
+  const hasApiKey = apiKey.trim().length > 0;
   const canGenerate =
-    mode === "ranting" ? segments.length > 0 || canAddSegment : activeSegments.length > 0;
+    (mode === "ranting" ? segments.length > 0 || canAddSegment : activeSegments.length > 0) &&
+    hasApiKey &&
+    status !== "loading";
+  const selectedProvider = providerConfigs.find((item) => item.provider === provider);
 
   function switchMode(nextMode: FeedbackMode) {
     if (nextMode === mode) {
@@ -97,13 +77,13 @@ export function App() {
     setSegments((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function generate() {
+  async function generate() {
     const nextSegments =
       mode === "ranting"
         ? [...segments, draft.trim()].filter(Boolean)
         : activeSegments;
 
-    if (nextSegments.length === 0) {
+    if (nextSegments.length === 0 || !hasApiKey || status === "loading") {
       return;
     }
 
@@ -112,7 +92,29 @@ export function App() {
       setDraft("");
     }
 
-    setGeneratedOutput(polishPreview(nextSegments, audience, tone));
+    setStatus("loading");
+    setErrorMessage("");
+
+    try {
+      const result = await generateFeedback({
+        segments: nextSegments,
+        mode,
+        audience,
+        tone,
+        provider,
+        apiKey,
+      });
+
+      setGeneratedOutput(result.polishedText);
+      setStatus("idle");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(
+        error instanceof FeedbackGenerationError
+          ? error.message
+          : "Something went wrong while generating feedback.",
+      );
+    }
   }
 
   function submitDraft() {
@@ -121,7 +123,7 @@ export function App() {
       return;
     }
 
-    generate();
+    void generate();
   }
 
   return (
@@ -132,19 +134,46 @@ export function App() {
             <p className="eyebrow">Spicy-to-Nice</p>
             <h1>Feedback without the flames.</h1>
           </div>
-          <div className="provider-field">
-            <label htmlFor="provider">Provider</label>
-            <select
-              id="provider"
-              value={provider}
-              onChange={(event) => setProvider(event.target.value as Provider)}
-            >
-              {providers.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+          <div className="provider-controls">
+            <div className="provider-field">
+              <label htmlFor="provider">Provider</label>
+              <select
+                id="provider"
+                value={provider}
+                onChange={(event) => {
+                  setProvider(event.target.value as Provider);
+                  setErrorMessage("");
+                  setStatus("idle");
+                }}
+              >
+                {providerConfigs.map((item) => (
+                  <option key={item.provider} value={item.provider}>
+                    {item.label}
+                    {item.implemented ? "" : " (soon)"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="api-key-field">
+              <label htmlFor="api-key">API key</label>
+              <input
+                id="api-key"
+                type="password"
+                value={apiKey}
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                  setErrorMessage("");
+                  setStatus("idle");
+                }}
+                placeholder="sk-..."
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p>
+                Key is kept in memory only and never saved. Use a restricted or
+                revocable key when possible.
+              </p>
+            </div>
           </div>
         </header>
 
@@ -255,10 +284,19 @@ export function App() {
               <p className="eyebrow">Polished draft</p>
               <h2>{mode === "ranting" ? "Final combined feedback" : "Ready to send"}</h2>
             </div>
-            <button type="button" onClick={generate} disabled={!canGenerate}>
-              Generate
+            <button type="button" onClick={() => void generate()} disabled={!canGenerate}>
+              {status === "loading" ? "Generating..." : "Generate"}
             </button>
           </div>
+          {!hasApiKey ? (
+            <p className="notice">Enter an API key to generate with {selectedProvider?.label}.</p>
+          ) : null}
+          {selectedProvider && !selectedProvider.implemented ? (
+            <p className="notice">
+              {selectedProvider.label} is planned but not wired yet. OpenAI works first.
+            </p>
+          ) : null}
+          {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
           <pre>{generatedOutput}</pre>
         </section>
       </section>

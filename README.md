@@ -57,4 +57,14 @@ npm run dev
 
 ## Notes on API Keys
 
-The initial direction is bring-your-own-key. No provider keys should be committed to this repository. If the prototype stores a key locally later, the UI should clearly disclose where and how it is stored.
+The prototype uses browser BYOK: the user pastes an API key into the app and the app sends requests directly to the selected provider.
+
+Current safety rules:
+
+- Keys are kept in React memory only.
+- Keys are not saved to `localStorage`, `sessionStorage`, cookies, or URL parameters.
+- Refreshing or closing the tab clears the key.
+- Keys must never be committed to this repository.
+- Use restricted, revocable, low-budget keys when possible.
+
+Browser BYOK is convenient for a static prototype, but it cannot truly hide the key from the page runtime. Avoid adding third-party analytics, remote scripts, or unnecessary dependencies while this mode is active.

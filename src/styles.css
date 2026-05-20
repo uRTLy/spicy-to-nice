@@ -64,12 +64,14 @@ h2 {
 
 button,
 select,
+input,
 textarea {
   font: inherit;
 }
 
 button,
-select {
+select,
+input {
   min-height: 42px;
   border: 1px solid #cbd8d4;
   border-radius: 8px;
@@ -83,7 +85,8 @@ button {
 }
 
 button:hover:not(:disabled),
-select:hover {
+select:hover,
+input:hover {
   border-color: #7da49d;
 }
 
@@ -98,13 +101,21 @@ button.active {
   color: #ffffff;
 }
 
-.provider-field {
+.provider-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 190px) minmax(260px, 360px);
+  gap: 14px;
+  align-items: start;
+}
+
+.provider-field,
+.api-key-field {
   display: grid;
   gap: 8px;
-  min-width: 180px;
 }
 
 .provider-field label,
+.api-key-field label,
 .field-label {
   color: #6d6257;
   font-size: 0.82rem;
@@ -113,9 +124,28 @@ button.active {
   text-transform: uppercase;
 }
 
-.provider-field select {
+.provider-field select,
+.api-key-field input {
   width: 100%;
   padding: 0 12px;
+}
+
+.api-key-field p,
+.notice,
+.error-message {
+  margin: 0;
+  color: #6d6257;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.notice,
+.error-message {
+  margin-bottom: 12px;
+}
+
+.error-message {
+  color: #b42318;
 }
 
 .mode-switch {
@@ -168,6 +198,7 @@ textarea {
 }
 
 textarea:focus,
+input:focus,
 button:focus-visible,
 select:focus-visible {
   outline: 3px solid rgba(15, 118, 110, 0.22);
@@ -268,9 +299,15 @@ pre {
     display: grid;
   }
 
+  .provider-controls,
   .provider-field,
+  .api-key-field,
   .settings-panel {
     width: 100%;
+  }
+
+  .provider-controls {
+    grid-template-columns: 1fr;
   }
 
   .mode-switch {

@@ -26,7 +26,7 @@ Good candidates:
 
 ## AI Strategy
 
-Version 1 should use bring-your-own-key hosted AI calls. This avoids building a backend or managing server-side secrets during the earliest prototype.
+Version 1 uses browser bring-your-own-key hosted AI calls. This avoids building a backend or managing server-side secrets during the earliest prototype.
 
 Provider priority:
 
@@ -38,7 +38,10 @@ Important security note:
 
 - Do not commit API keys.
 - Do not hard-code API keys.
-- If local browser storage is added later, make it explicit and user-controlled.
+- Store keys in React memory only.
+- Do not use localStorage, sessionStorage, cookies, IndexedDB, or URL parameters for keys.
+- If persistent browser storage is added later, make it explicit and user-controlled.
+- Avoid third-party analytics and remote scripts while browser BYOK is active.
 
 ## Future Backend Option
 
