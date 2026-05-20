@@ -115,6 +115,15 @@ export function App() {
     setGeneratedOutput(polishPreview(nextSegments, audience, tone));
   }
 
+  function submitDraft() {
+    if (mode === "ranting") {
+      addSegment();
+      return;
+    }
+
+    generate();
+  }
+
   return (
     <main className="app-shell">
       <section className="workbench" aria-label="Feedback translator">
@@ -166,9 +175,13 @@ export function App() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
-                if (mode === "ranting" && event.metaKey && event.key === "Enter") {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
                   event.preventDefault();
-                  addSegment();
+                  submitDraft();
                 }
               }}
               placeholder={

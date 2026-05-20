@@ -51,7 +51,10 @@ Prototype design decisions:
 - Standard Mode and Ranting Mode live in a two-option segmented control.
 - Ranting Mode keeps the current textarea focused on only one thought at a time.
 - Added segments appear immediately in a compact queue.
-- The app should support a keyboard shortcut for quickly saving a segment.
+- Pressing Enter should submit the current message.
+- Pressing Shift+Enter should insert a newline.
+- In Standard Mode, Enter generates the polished draft.
+- In Ranting Mode, Enter saves the current segment.
 - The app should not show a polished result until the user presses Generate.
 - Pressing Generate in Ranting Mode should include the current unsaved segment.
 - Switching from Standard Mode to Ranting Mode should preserve existing text as the first segment.
