@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useReducer, useRef } from "react";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
 import type { Audience, FeedbackMode, Provider, Tone } from "./feedbackTypes";
 
@@ -16,109 +16,253 @@ const tones: Array<{ label: string; value: Tone }> = [
   { label: "Concise", value: "concise" },
 ];
 
-export function App() {
-  const [mode, setMode] = useState<FeedbackMode>("single");
-  const [audience, setAudience] = useState<Audience>("manager");
-  const [tone, setTone] = useState<Tone>("diplomatic");
-  const [provider, setProvider] = useState<Provider>("openai");
-  const [apiKey, setApiKey] = useState("");
-  const [draft, setDraft] = useState("");
-  const [segments, setSegments] = useState<string[]>([]);
-  const [generatedOutput, setGeneratedOutput] = useState(
-    "Your polished feedback will appear here.",
-  );
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+type Segment = {
+  id: string;
+  text: string;
+};
 
-  const activeSegments = useMemo(() => {
-    if (mode === "ranting") {
-      return segments;
-    }
+type OutputState =
+  | { status: "idle"; text: string }
+  | { status: "loading"; text: string }
+  | { status: "success"; text: string }
+  | { status: "error"; text: string; message: string };
 
-    return draft.trim() ? [draft.trim()] : [];
-  }, [draft, mode, segments]);
+type AppState = {
+  mode: FeedbackMode;
+  audience: Audience;
+  tone: Tone;
+  provider: Provider;
+  apiKey: string;
+  draft: string;
+  segments: Segment[];
+  output: OutputState;
+};
 
-  const canAddSegment = draft.trim().length > 0;
-  const hasApiKey = apiKey.trim().length > 0;
-  const canGenerate =
-    (mode === "ranting" ? segments.length > 0 || canAddSegment : activeSegments.length > 0) &&
-    hasApiKey &&
-    status !== "loading";
-  const selectedProvider = providerConfigs.find((item) => item.provider === provider);
+type AppAction =
+  | { type: "switch_mode"; mode: FeedbackMode }
+  | { type: "set_audience"; audience: Audience }
+  | { type: "set_tone"; tone: Tone }
+  | { type: "set_provider"; provider: Provider }
+  | { type: "set_api_key"; apiKey: string }
+  | { type: "set_draft"; draft: string }
+  | { type: "add_segment"; segment: Segment }
+  | { type: "remove_segment"; id: string }
+  | { type: "generation_started" }
+  | { type: "generation_succeeded"; text: string }
+  | { type: "generation_failed"; message: string };
 
-  function switchMode(nextMode: FeedbackMode) {
-    if (nextMode === mode) {
-      return;
-    }
+const initialOutputText = "Your polished feedback will appear here.";
 
-    if (mode === "single" && nextMode === "ranting" && draft.trim()) {
-      setSegments([draft.trim()]);
-      setDraft("");
-    }
+const initialState: AppState = {
+  mode: "single",
+  audience: "manager",
+  tone: "diplomatic",
+  provider: "openai",
+  apiKey: "",
+  draft: "",
+  segments: [],
+  output: { status: "idle", text: initialOutputText },
+};
 
-    if (mode === "ranting" && nextMode === "single") {
-      setDraft(segments.join("\n\n"));
-      setSegments([]);
-    }
-
-    setMode(nextMode);
+function clearError(output: OutputState): OutputState {
+  if (output.status !== "error") {
+    return output;
   }
+
+  return { status: "idle", text: output.text };
+}
+
+function makeSegment(text: string): Segment {
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    text,
+  };
+}
+
+function reducer(state: AppState, action: AppAction): AppState {
+  if (state.output.status === "loading") {
+    switch (action.type) {
+      case "switch_mode":
+      case "set_audience":
+      case "set_tone":
+      case "set_provider":
+      case "set_api_key":
+      case "set_draft":
+      case "add_segment":
+      case "remove_segment":
+        return state;
+    }
+  }
+
+  switch (action.type) {
+    case "switch_mode": {
+      if (action.mode === state.mode || state.output.status === "loading") {
+        return state;
+      }
+
+      if (state.mode === "single" && action.mode === "ranting") {
+        const draft = state.draft.trim();
+
+        return {
+          ...state,
+          mode: "ranting",
+          draft: "",
+          segments: draft ? [makeSegment(draft)] : [],
+          output: clearError(state.output),
+        };
+      }
+
+      if (state.mode === "ranting" && action.mode === "single") {
+        const combinedDraft = [
+          ...state.segments.map((segment) => segment.text),
+          state.draft.trim(),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        return {
+          ...state,
+          mode: "single",
+          draft: combinedDraft,
+          segments: [],
+          output: clearError(state.output),
+        };
+      }
+
+      return { ...state, mode: action.mode, output: clearError(state.output) };
+    }
+    case "set_audience":
+      return { ...state, audience: action.audience, output: clearError(state.output) };
+    case "set_tone":
+      return { ...state, tone: action.tone, output: clearError(state.output) };
+    case "set_provider":
+      return { ...state, provider: action.provider, output: clearError(state.output) };
+    case "set_api_key":
+      return { ...state, apiKey: action.apiKey, output: clearError(state.output) };
+    case "set_draft":
+      return { ...state, draft: action.draft, output: clearError(state.output) };
+    case "add_segment":
+      return {
+        ...state,
+        draft: "",
+        segments: [...state.segments, action.segment],
+        output: clearError(state.output),
+      };
+    case "remove_segment":
+      return {
+        ...state,
+        segments: state.segments.filter((segment) => segment.id !== action.id),
+        output: clearError(state.output),
+      };
+    case "generation_started":
+      if (state.output.status === "loading") {
+        return state;
+      }
+
+      return { ...state, output: { status: "loading", text: state.output.text } };
+    case "generation_succeeded":
+      return { ...state, output: { status: "success", text: action.text } };
+    case "generation_failed":
+      return {
+        ...state,
+        output: {
+          status: "error",
+          text: state.output.text,
+          message: action.message,
+        },
+      };
+    default:
+      return state;
+  }
+}
+
+function getSegmentsForGeneration(state: AppState) {
+  if (state.mode === "ranting") {
+    return [...state.segments.map((segment) => segment.text), state.draft.trim()].filter(Boolean);
+  }
+
+  return state.draft.trim() ? [state.draft.trim()] : [];
+}
+
+function getGenerationBlocker(state: AppState) {
+  const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
+  const hasInput = getSegmentsForGeneration(state).length > 0;
+
+  if (state.output.status === "loading") {
+    return "Generation is already in progress.";
+  }
+
+  if (!hasInput) {
+    return "Add feedback before generating.";
+  }
+
+  if (!state.apiKey.trim()) {
+    return `Enter an API key to generate with ${selectedProvider?.label ?? "this provider"}.`;
+  }
+
+  if (selectedProvider && !selectedProvider.implemented) {
+    return `${selectedProvider.label} is planned but not wired yet. OpenAI works first.`;
+  }
+
+  return "";
+}
+
+export function App() {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const generationBlocker = getGenerationBlocker(state);
+  const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
+  const canGenerate = !generationBlocker;
 
   function addSegment() {
-    if (!canAddSegment) {
+    const text = state.draft.trim();
+
+    if (!text || state.output.status === "loading") {
       return;
     }
 
-    setSegments((current) => [...current, draft.trim()]);
-    setDraft("");
-  }
-
-  function removeSegment(index: number) {
-    setSegments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    dispatch({ type: "add_segment", segment: makeSegment(text) });
+    requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   async function generate() {
-    const nextSegments =
-      mode === "ranting"
-        ? [...segments, draft.trim()].filter(Boolean)
-        : activeSegments;
+    const segments = getSegmentsForGeneration(state);
+    const pendingRantSegment = state.mode === "ranting" ? state.draft.trim() : "";
 
-    if (nextSegments.length === 0 || !hasApiKey || status === "loading") {
+    if (generationBlocker || segments.length === 0) {
       return;
     }
 
-    if (mode === "ranting" && draft.trim()) {
-      setSegments(nextSegments);
-      setDraft("");
+    if (pendingRantSegment) {
+      dispatch({ type: "add_segment", segment: makeSegment(pendingRantSegment) });
     }
 
-    setStatus("loading");
-    setErrorMessage("");
+    dispatch({ type: "generation_started" });
 
     try {
       const result = await generateFeedback({
-        segments: nextSegments,
-        mode,
-        audience,
-        tone,
-        provider,
-        apiKey,
+        segments,
+        mode: state.mode,
+        audience: state.audience,
+        tone: state.tone,
+        provider: state.provider,
+        apiKey: state.apiKey,
       });
 
-      setGeneratedOutput(result.polishedText);
-      setStatus("idle");
+      dispatch({ type: "generation_succeeded", text: result.polishedText });
     } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        error instanceof FeedbackGenerationError
-          ? error.message
-          : "Something went wrong while generating feedback.",
-      );
+      dispatch({
+        type: "generation_failed",
+        message:
+          error instanceof FeedbackGenerationError
+            ? error.message
+            : "Something went wrong while generating feedback.",
+      });
     }
   }
 
   function submitDraft() {
-    if (mode === "ranting") {
+    if (state.mode === "ranting") {
       addSegment();
       return;
     }
@@ -139,12 +283,11 @@ export function App() {
               <label htmlFor="provider">Provider</label>
               <select
                 id="provider"
-                value={provider}
-                onChange={(event) => {
-                  setProvider(event.target.value as Provider);
-                  setErrorMessage("");
-                  setStatus("idle");
-                }}
+                value={state.provider}
+                disabled={state.output.status === "loading"}
+                onChange={(event) =>
+                  dispatch({ type: "set_provider", provider: event.target.value as Provider })
+                }
               >
                 {providerConfigs.map((item) => (
                   <option key={item.provider} value={item.provider}>
@@ -159,12 +302,11 @@ export function App() {
               <input
                 id="api-key"
                 type="password"
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  setErrorMessage("");
-                  setStatus("idle");
-                }}
+                value={state.apiKey}
+                disabled={state.output.status === "loading"}
+                onChange={(event) =>
+                  dispatch({ type: "set_api_key", apiKey: event.target.value })
+                }
                 placeholder="sk-..."
                 autoComplete="off"
                 spellCheck={false}
@@ -179,30 +321,44 @@ export function App() {
 
         <div className="mode-switch" aria-label="Writing mode">
           <button
-            className={mode === "single" ? "active" : ""}
+            className={state.mode === "single" ? "active" : ""}
             type="button"
-            onClick={() => switchMode("single")}
+            disabled={state.output.status === "loading"}
+            onClick={() => dispatch({ type: "switch_mode", mode: "single" })}
           >
             Standard
           </button>
           <button
-            className={mode === "ranting" ? "active" : ""}
+            className={state.mode === "ranting" ? "active" : ""}
             type="button"
-            onClick={() => switchMode("ranting")}
+            disabled={state.output.status === "loading"}
+            onClick={() => dispatch({ type: "switch_mode", mode: "ranting" })}
           >
             Ranting
           </button>
         </div>
 
+        {state.mode === "ranting" ? (
+          <div className="flow-banner" aria-live="polite">
+            <span>{state.segments.length}</span>
+            {state.segments.length === 1 ? "thought captured" : "thoughts captured"}
+            <strong>Press Enter to keep the flow going.</strong>
+          </div>
+        ) : null}
+
         <section className="grid">
-          <div className="input-panel">
+          <div className={`input-panel ${state.mode === "ranting" ? "ranting-panel" : ""}`}>
             <label className="field-label" htmlFor="raw-feedback">
-              {mode === "ranting" ? "Rant segment" : "Raw feedback"}
+              {state.mode === "ranting" ? "Rant segment" : "Raw feedback"}
             </label>
             <textarea
               id="raw-feedback"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              ref={textareaRef}
+              value={state.draft}
+              disabled={state.output.status === "loading"}
+              onChange={(event) =>
+                dispatch({ type: "set_draft", draft: event.target.value })
+              }
               onKeyDown={(event) => {
                 if (
                   event.key === "Enter" &&
@@ -214,32 +370,41 @@ export function App() {
                 }
               }}
               placeholder={
-                mode === "ranting"
-                  ? "Write one thought, add it, then keep going..."
+                state.mode === "ranting"
+                  ? "Write one thought, press Enter, then keep going..."
                   : "Paste the spicy version here..."
               }
             />
 
-            {mode === "ranting" ? (
+            {state.mode === "ranting" ? (
               <div className="rant-actions">
                 <button type="button" onClick={addSegment} disabled={!canAddSegment}>
                   Add segment
                 </button>
-                <span>{segments.length} saved</span>
+                <span>{state.segments.length} saved</span>
               </div>
             ) : null}
 
-            {mode === "ranting" && segments.length > 0 ? (
+            {state.mode === "ranting" && state.segments.length > 0 ? (
               <ol className="segment-list" aria-label="Saved rant segments">
-                {segments.map((segment, index) => (
-                  <li key={`${segment}-${index}`}>
-                    <p>{segment}</p>
-                    <button type="button" onClick={() => removeSegment(index)}>
+                {state.segments.map((segment, index) => (
+                  <li key={segment.id}>
+                    <span>{index + 1}</span>
+                    <p>{segment.text}</p>
+                    <button
+                      type="button"
+                      disabled={state.output.status === "loading"}
+                      onClick={() => dispatch({ type: "remove_segment", id: segment.id })}
+                    >
                       Remove
                     </button>
                   </li>
                 ))}
               </ol>
+            ) : state.mode === "ranting" ? (
+              <div className="empty-rant">
+                Each Enter captures a thought here. Generate when the whole rant is out.
+              </div>
             ) : null}
           </div>
 
@@ -249,10 +414,11 @@ export function App() {
               <div className="choice-grid">
                 {audiences.map((item) => (
                   <button
-                    className={audience === item.value ? "active" : ""}
+                    className={state.audience === item.value ? "active" : ""}
                     key={item.value}
                     type="button"
-                    onClick={() => setAudience(item.value)}
+                    disabled={state.output.status === "loading"}
+                    onClick={() => dispatch({ type: "set_audience", audience: item.value })}
                   >
                     {item.label}
                   </button>
@@ -265,10 +431,11 @@ export function App() {
               <div className="choice-grid">
                 {tones.map((item) => (
                   <button
-                    className={tone === item.value ? "active" : ""}
+                    className={state.tone === item.value ? "active" : ""}
                     key={item.value}
                     type="button"
-                    onClick={() => setTone(item.value)}
+                    disabled={state.output.status === "loading"}
+                    onClick={() => dispatch({ type: "set_tone", tone: item.value })}
                   >
                     {item.label}
                   </button>
@@ -278,26 +445,32 @@ export function App() {
           </aside>
         </section>
 
-        <section className="output-panel" aria-label="Polished feedback">
+        <section
+          className={`output-panel output-${state.output.status}`}
+          aria-label="Polished feedback"
+        >
           <div className="output-header">
             <div>
               <p className="eyebrow">Polished draft</p>
-              <h2>{mode === "ranting" ? "Final combined feedback" : "Ready to send"}</h2>
+              <h2>{state.mode === "ranting" ? "Final combined feedback" : "Ready to send"}</h2>
             </div>
             <button type="button" onClick={() => void generate()} disabled={!canGenerate}>
-              {status === "loading" ? "Generating..." : "Generate"}
+              {state.output.status === "loading" ? "Generating..." : "Generate"}
             </button>
           </div>
-          {!hasApiKey ? (
-            <p className="notice">Enter an API key to generate with {selectedProvider?.label}.</p>
+          {generationBlocker && state.output.status !== "loading" ? (
+            <p className="notice">{generationBlocker}</p>
           ) : null}
-          {selectedProvider && !selectedProvider.implemented ? (
-            <p className="notice">
-              {selectedProvider.label} is planned but not wired yet. OpenAI works first.
-            </p>
+          {state.output.status === "error" ? (
+            <p className="error-message">{state.output.message}</p>
           ) : null}
-          {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
-          <pre>{generatedOutput}</pre>
+          {state.output.status === "loading" ? (
+            <div className="thinking" aria-live="polite">
+              <span />
+              Reading the spice, finding the useful signal...
+            </div>
+          ) : null}
+          <pre>{state.output.text}</pre>
         </section>
       </section>
     </main>
