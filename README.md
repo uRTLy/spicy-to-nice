@@ -81,7 +81,7 @@ This repo includes a sanitized transcript export for the in-app project notes pa
 npm run export:conversation
 ```
 
-The exporter keeps visible user/assistant messages and omits hidden instructions, reasoning, tool payloads, and raw command output. See `docs/CONVERSATION_EXPORT.md` for the privacy checklist and optional third-party transcript tools.
+The exporter keeps visible user/assistant messages and exported screenshots, while omitting hidden instructions, reasoning, tool payloads, and raw command output. See `docs/CONVERSATION_EXPORT.md` for the privacy checklist and optional third-party transcript tools.
 
 ## Notes on API Keys
 

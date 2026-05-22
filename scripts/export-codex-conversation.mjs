@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const DEFAULT_SOURCE =
@@ -23,6 +23,7 @@ const args = new Map(
 const sourcePath = args.get("input") || DEFAULT_SOURCE;
 const outDir = args.get("out-dir") || DEFAULT_OUT_DIR;
 const title = args.get("title") || "Spicy-to-Nice Codex Build Conversation";
+const mediaDir = path.join(outDir, "media");
 
 const source = await readFile(sourcePath, "utf8");
 const messages = [];
@@ -31,7 +32,12 @@ const stats = {
   toolEventsSkipped: 0,
   reasoningEventsSkipped: 0,
   redactionsApplied: 0,
+  attachmentsExported: 0,
 };
+
+await mkdir(outDir, { recursive: true });
+await rm(mediaDir, { force: true, recursive: true });
+await mkdir(mediaDir, { recursive: true });
 
 for (const line of source.split(/\n/).filter(Boolean)) {
   const entry = JSON.parse(line);
@@ -48,9 +54,11 @@ for (const line of source.split(/\n/).filter(Boolean)) {
       continue;
     }
 
-    const text = extractText(payload.content);
+    const messageIndex = messages.length + 1;
+    const attachments = await extractAttachments(payload.content, messageIndex);
+    const text = extractText(payload.content, attachments);
 
-    if (!text.trim() || shouldSkipMessage(text)) {
+    if ((!text.trim() && attachments.length === 0) || shouldSkipMessage(text)) {
       continue;
     }
 
@@ -61,7 +69,9 @@ for (const line of source.split(/\n/).filter(Boolean)) {
       role: payload.role,
       text: redacted.text,
       timestamp: entry.timestamp,
+      attachments,
     });
+    stats.attachmentsExported += attachments.length;
     continue;
   }
 
@@ -86,7 +96,6 @@ const exportPayload = {
   messages,
 };
 
-await mkdir(outDir, { recursive: true });
 await writeFile(path.join(outDir, "conversation.json"), `${JSON.stringify(exportPayload, null, 2)}\n`);
 await writeFile(path.join(outDir, "index.html"), buildViewerHtml(title));
 await writeFile(
@@ -98,6 +107,7 @@ await writeFile(
     "",
     "- `index.html` is a static fallback viewer.",
     "- `conversation.json` contains visible user/assistant messages only.",
+    "- `media/` contains exported screenshots referenced by visible messages.",
     "- The primary in-app viewer is the React route at `/conversation`.",
     "- Hidden instructions, reasoning, tool payloads, and secrets are excluded or redacted.",
     "",
@@ -112,7 +122,7 @@ await writeFile(
 
 console.log(`Exported ${messages.length} visible messages to ${outDir}`);
 
-function extractText(content = []) {
+function extractText(content = [], attachments = []) {
   return content
     .map((item) => {
       if (item.type === "input_text" || item.type === "output_text" || item.type === "text") {
@@ -120,13 +130,95 @@ function extractText(content = []) {
       }
 
       if (item.type === "input_image" || item.type === "image") {
-        return "[Image omitted from sanitized export]";
+        return attachments.length > 0 ? "[Screenshot attached]" : "[Image omitted]";
       }
 
       return "";
     })
     .filter(Boolean)
     .join("\n\n");
+}
+
+async function extractAttachments(content = [], messageIndex) {
+  const attachments = [];
+  let imageIndex = 0;
+
+  for (const item of content) {
+    if (item.type !== "input_image" && item.type !== "image") {
+      continue;
+    }
+
+    imageIndex += 1;
+    const dataUrl = item.image_url ?? item.url ?? "";
+    const parsed = parseDataUrl(dataUrl);
+
+    if (!parsed) {
+      attachments.push({
+        type: "image",
+        label: `Screenshot ${imageIndex}`,
+        detail: item.detail,
+      });
+      continue;
+    }
+
+    const extension = extensionForMime(parsed.mimeType);
+    const filename = `message-${String(messageIndex).padStart(3, "0")}-image-${imageIndex}.${extension}`;
+    const outputPath = path.join(mediaDir, filename);
+
+    await writeFile(outputPath, parsed.buffer);
+
+    attachments.push({
+      type: "image",
+      label: `Screenshot ${imageIndex}`,
+      src: `media/${filename}`,
+      mimeType: parsed.mimeType,
+      sizeBytes: parsed.buffer.byteLength,
+      detail: item.detail,
+      dimensions: readImageDimensions(parsed.buffer, parsed.mimeType),
+    });
+  }
+
+  return attachments;
+}
+
+function parseDataUrl(value) {
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], "base64"),
+  };
+}
+
+function extensionForMime(mimeType) {
+  if (mimeType === "image/jpeg") {
+    return "jpg";
+  }
+
+  if (mimeType === "image/webp") {
+    return "webp";
+  }
+
+  return "png";
+}
+
+function readImageDimensions(buffer, mimeType) {
+  if (
+    mimeType === "image/png" &&
+    buffer.length >= 24 &&
+    buffer.toString("ascii", 12, 16) === "IHDR"
+  ) {
+    return {
+      width: buffer.readUInt32BE(16),
+      height: buffer.readUInt32BE(20),
+    };
+  }
+
+  return undefined;
 }
 
 function redact(value) {
