@@ -55,6 +55,10 @@ export async function generateWithWebLLM(
   }
 }
 
+export async function preloadWebLLMModel(modelId?: string) {
+  await getLocalEngine(modelId);
+}
+
 async function getLocalEngine(modelId?: string) {
   const plan = await llmDownloader.prepare(modelId);
 
@@ -70,7 +74,7 @@ async function getLocalEngine(modelId?: string) {
   }
 
   const initProgressCallback: InitProgressCallback = (progress) => {
-    llmDownloader.mapWebLLMProgress(progress);
+    llmDownloader.mapWebLLMProgress(progress, plan.model);
   };
 
   const promise = createEngine(plan.model.modelId, plan.model.id, initProgressCallback);
@@ -83,7 +87,7 @@ async function getLocalEngine(modelId?: string) {
   } catch (error) {
     engineEntry = null;
     const message = getLocalErrorMessage(error);
-    llmDownloader.markError(message);
+    llmDownloader.markError(message, plan.model);
     throw new FeedbackGenerationError(message);
   }
 }

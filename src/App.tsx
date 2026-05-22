@@ -8,6 +8,7 @@ import {
   supportedLocalModels,
 } from "./ai/localModelCatalog";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
+import { preloadWebLLMModel } from "./ai/webllmAdapter";
 import type { Audience, FeedbackMode, FeedbackVariant, Provider, Tone } from "./feedbackTypes";
 
 const audiences: Array<{ label: string; value: Audience }> = [
@@ -284,6 +285,15 @@ function getDisplayedOutputText(state: AppState) {
   return getSelectedVariant(state)?.text ?? state.output.text;
 }
 
+function isLocalProgressBusy(progress: LLMDownloadProgress | null) {
+  return (
+    progress?.stage === "checking-support" ||
+    progress?.stage === "ready-to-download" ||
+    progress?.stage === "downloading" ||
+    progress?.stage === "loading"
+  );
+}
+
 function getGenerationBlocker(state: AppState) {
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
   const hasInput = getSegmentsForGeneration(state).length > 0;
@@ -360,13 +370,18 @@ type TranslatorAppProps = {
 function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [localProgress, setLocalProgress] = useState<LLMDownloadProgress | null>(null);
+  const [isLocalModelLoading, setIsLocalModelLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
-  const defaultLocalModel = getDefaultLocalModel();
-  const selectedLocalModel = getLocalModel(state.localModelId) ?? defaultLocalModel;
+  const selectedLocalModel = getLocalModel(state.localModelId) ?? getDefaultLocalModel();
   const generationBlocker = getGenerationBlocker(state);
   const selectedVariant = getSelectedVariant(state);
   const displayedOutputText = getDisplayedOutputText(state);
+  const selectedLocalProgress =
+    localProgress?.modelId === selectedLocalModel.id ? localProgress : null;
+  const isSelectedLocalModelReady = selectedLocalProgress?.stage === "ready";
+  const isSelectedLocalModelBusy =
+    isLocalModelLoading || isLocalProgressBusy(selectedLocalProgress);
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
   const canSendDraft = state.mode === "ranting" ? canAddSegment : canGenerate;
@@ -444,6 +459,22 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
     }
   }
 
+  async function loadLocalModelNow() {
+    if (isSelectedLocalModelBusy || isSelectedLocalModelReady) {
+      return;
+    }
+
+    setIsLocalModelLoading(true);
+
+    try {
+      await preloadWebLLMModel(state.localModelId);
+    } catch {
+      // The downloader owns user-facing progress and error messages.
+    } finally {
+      setIsLocalModelLoading(false);
+    }
+  }
+
   function submitDraft() {
     if (state.mode === "ranting") {
       addSegment();
@@ -481,7 +512,7 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
               <select
                 id="provider"
                 value={state.provider}
-                disabled={state.output.status === "loading"}
+                disabled={state.output.status === "loading" || isLocalModelLoading}
                 onChange={(event) =>
                   dispatch({ type: "set_provider", provider: event.target.value as Provider })
                 }
@@ -520,7 +551,7 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
                 <select
                   id="local-model"
                   value={selectedLocalModel.id}
-                  disabled={state.output.status === "loading"}
+                  disabled={state.output.status === "loading" || isLocalModelLoading}
                   onChange={(event) =>
                     dispatch({ type: "set_local_model", localModelId: event.target.value })
                   }
@@ -531,23 +562,73 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
                     </option>
                   ))}
                 </select>
-                <p>
-                  Default: {defaultLocalModel.label}. Selected model downloads about{" "}
-                  {selectedLocalModel.estimatedDownloadMB} MB and needs about{" "}
-                  {Math.round(selectedLocalModel.vramRequiredMB)} MB VRAM.
-                </p>
-                {state.provider === "local" && localProgress ? (
-                  <div className="local-progress" aria-live="polite">
-                    <span>{localProgress.message}</span>
-                    {typeof localProgress.progress === "number" ? (
-                      <progress value={localProgress.progress} max={1} />
-                    ) : null}
-                  </div>
-                ) : null}
+                <p>Pick what runs in the browser. Nothing downloads until you load it.</p>
               </div>
             )}
           </div>
         </header>
+
+        {state.provider === "local" ? (
+          <section className="local-model-card" aria-label="Offline model setup">
+            <div>
+              <p className="eyebrow">Offline setup</p>
+              <h2>{selectedLocalModel.label}</h2>
+              <p>{selectedLocalModel.recommendedUse}</p>
+            </div>
+            <dl className="local-model-stats">
+              <div>
+                <dt>First download</dt>
+                <dd>{selectedLocalModel.estimatedDownloadMB} MB</dd>
+              </div>
+              <div>
+                <dt>GPU memory</dt>
+                <dd>{Math.round(selectedLocalModel.vramRequiredMB)} MB</dd>
+              </div>
+              <div>
+                <dt>Privacy</dt>
+                <dd>Runs in this browser</dd>
+              </div>
+            </dl>
+            <div className="local-model-actions">
+              <button
+                type="button"
+                disabled={
+                  state.output.status === "loading" ||
+                  isSelectedLocalModelReady ||
+                  isSelectedLocalModelBusy
+                }
+                onClick={() => void loadLocalModelNow()}
+              >
+                {isSelectedLocalModelReady
+                  ? "Model ready"
+                  : isSelectedLocalModelBusy
+                    ? "Loading..."
+                    : "Load model"}
+              </button>
+              <p>
+                Load it now to avoid waiting later. Generate will also load it automatically
+                when Offline is selected.
+              </p>
+            </div>
+            {selectedLocalProgress ? (
+              <div
+                className={`local-progress local-progress-${selectedLocalProgress.stage}`}
+                aria-live="polite"
+              >
+                <span>{selectedLocalProgress.message}</span>
+                {typeof selectedLocalProgress.progress === "number" ? (
+                  <progress value={selectedLocalProgress.progress} max={1} />
+                ) : null}
+              </div>
+            ) : (
+              <div className="local-progress" aria-live="polite">
+                <span>
+                  Ready when you are. This download starts only after Load model or Generate.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <div className="mode-switch" aria-label="Writing mode">
           <button

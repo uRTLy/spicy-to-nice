@@ -70,6 +70,7 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Generation returns balanced, direct, and concise variants for the user to choose from.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
 - Offline generation is wired through WebLLM/WebGPU with a worker-backed local adapter and typed model catalog.
+- Offline mode includes a model setup panel with download size, GPU memory, privacy notes, and a manual Load model action.
 - Sanitized project notes are available at `/conversation` inside the running app.
 
 ## Conversation Export
