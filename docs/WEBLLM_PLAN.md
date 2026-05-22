@@ -85,18 +85,18 @@ The codebase now has the first abstraction layer in place:
 
 ## Model Candidates
 
-Default candidate:
+Default smallest candidate:
+
+- `SmolLM2-360M-Instruct-q4f16_1-MLC`
+- Best first-run UX for Offline mode: roughly 198 MB downloaded and 376 MB VRAM required.
+- Lower quality for nuance, tone preservation, and interpersonal context, so present larger models as easy upgrade choices.
+
+Quality-balanced candidate:
 
 - `Llama-3.2-1B-Instruct-q4f16_1-MLC`
 - Practical quality floor for short English rewrite tasks.
 - Current WebLLM config lists roughly 879 MB VRAM required.
 - Hugging Face file metadata totals roughly 672 MB downloaded.
-
-Lower-end compatibility candidate:
-
-- `SmolLM2-360M-Instruct-q4f16_1-MLC`
-- Smaller and more likely to load on constrained devices: roughly 198 MB downloaded and 376 MB VRAM required.
-- Lower quality for nuance, tone preservation, and interpersonal context.
 
 Better quality candidates for later:
 

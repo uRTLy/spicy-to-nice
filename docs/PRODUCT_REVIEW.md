@@ -49,18 +49,19 @@ Local WebLLM adapter
 ## UX Gaps To Close Next
 
 - Add an explicit Offline provider loading panel.
-- Add a local-model picker only after the first Offline model works.
+- Keep the local-model picker visible when Offline is selected, but do not download anything until the user explicitly generates/loads.
 - Add a demo/sample-rant button for recruiters who do not have an API key ready.
 - Add clearer quota/billing guidance for OpenAI key errors.
 - Add a small model bakeoff set with saved examples and expected qualities.
 
 ## Local Model Decision
 
-Default to `Llama-3.2-1B-Instruct-q4f16_1-MLC` first because it has the best balance for this task:
+Default Offline to `SmolLM2-360M-Instruct-q4f16_1-MLC` first because it has the best first-run UX:
 
-- Good enough instruction following for feedback rewriting.
-- Lower VRAM than Qwen2.5 1.5B and Llama 3.2 3B.
-- Better likely nuance than the tiny compatibility models.
+- Smallest credible option in the catalog.
+- Roughly 198 MB downloaded on first use.
+- Roughly 376 MB VRAM required.
+- Good enough to test the offline path without a huge wait.
 - Supported by WebLLM's prebuilt model config.
 
-Keep `Qwen2.5-1.5B-Instruct-q4f16_1-MLC` as the first quality challenger.
+The tradeoff is quality: SmolLM2 may miss nuance or over-simplify. Keep `Llama-3.2-1B-Instruct-q4f16_1-MLC` and `Qwen2.5-1.5B-Instruct-q4f16_1-MLC` as the first quality challengers users can choose before downloading.

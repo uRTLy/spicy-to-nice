@@ -1,5 +1,10 @@
 import { useReducer, useRef } from "react";
-import { getDefaultLocalModel } from "./ai/localModelCatalog";
+import {
+  defaultLocalModelId,
+  getDefaultLocalModel,
+  getLocalModel,
+  supportedLocalModels,
+} from "./ai/localModelCatalog";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
 import type { Audience, FeedbackMode, Provider, Tone } from "./feedbackTypes";
 
@@ -33,6 +38,7 @@ type AppState = {
   audience: Audience;
   tone: Tone;
   provider: Provider;
+  localModelId: string;
   apiKey: string;
   draft: string;
   segments: Segment[];
@@ -47,6 +53,7 @@ type AppAction =
   | { type: "set_audience"; audience: Audience }
   | { type: "set_tone"; tone: Tone }
   | { type: "set_provider"; provider: Provider }
+  | { type: "set_local_model"; localModelId: string }
   | { type: "set_api_key"; apiKey: string }
   | { type: "set_draft"; draft: string }
   | { type: "add_segment"; segment: Segment }
@@ -66,6 +73,7 @@ const initialState: AppState = {
   audience: "manager",
   tone: "diplomatic",
   provider: "openai",
+  localModelId: defaultLocalModelId,
   apiKey: "",
   draft: "",
   segments: [],
@@ -97,6 +105,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       case "set_audience":
       case "set_tone":
       case "set_provider":
+      case "set_local_model":
       case "set_api_key":
       case "set_draft":
       case "add_segment":
@@ -160,6 +169,13 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         provider: action.provider,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
+    case "set_local_model":
+      return {
+        ...state,
+        localModelId: action.localModelId,
         shortInputConfirmationPending: false,
         output: clearError(state.output),
       };
@@ -275,6 +291,7 @@ export function App() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
   const defaultLocalModel = getDefaultLocalModel();
+  const selectedLocalModel = getLocalModel(state.localModelId) ?? defaultLocalModel;
   const generationBlocker = getGenerationBlocker(state);
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
@@ -326,6 +343,7 @@ export function App() {
         tone: state.tone,
         provider: state.provider,
         apiKey: state.apiKey,
+        localModelId: state.localModelId,
       });
 
       dispatch({ type: "generation_succeeded", text: result.polishedText });
@@ -412,10 +430,25 @@ export function App() {
               </div>
             ) : (
               <div className="api-key-field">
-                <span className="field-label">Local model</span>
+                <label htmlFor="local-model">Local model</label>
+                <select
+                  id="local-model"
+                  value={selectedLocalModel.id}
+                  disabled={state.output.status === "loading"}
+                  onChange={(event) =>
+                    dispatch({ type: "set_local_model", localModelId: event.target.value })
+                  }
+                >
+                  {supportedLocalModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label} - {model.estimatedDownloadMB} MB
+                    </option>
+                  ))}
+                </select>
                 <p>
-                  Planned default: {defaultLocalModel.label}, about{" "}
-                  {defaultLocalModel.estimatedDownloadMB} MB downloaded on first use.
+                  Default: {defaultLocalModel.label}. Selected model downloads about{" "}
+                  {selectedLocalModel.estimatedDownloadMB} MB and needs about{" "}
+                  {Math.round(selectedLocalModel.vramRequiredMB)} MB VRAM.
                 </p>
               </div>
             )}

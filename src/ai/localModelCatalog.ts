@@ -30,7 +30,7 @@ const catalog = localModels as LocalModelRecord[];
 
 export const supportedLocalModels: LocalModelRecord[] = catalog;
 
-export const defaultLocalModelId: LocalModelId = "llama-3.2-1b-instruct-q4f16_1";
+export const defaultLocalModelId: LocalModelId = "smollm2-360m-instruct-q4f16_1";
 
 export function getLocalModel(modelId: LocalModelId | string): LocalModelRecord | undefined {
   return supportedLocalModels.find((model) => model.id === modelId || model.modelId === modelId);
