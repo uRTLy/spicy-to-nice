@@ -1,3 +1,4 @@
+import type { InitProgressReport } from "@mlc-ai/web-llm";
 import { FeedbackGenerationError } from "./errors";
 import {
   buildWebLLMAppConfig,
@@ -94,8 +95,8 @@ export class LLMDownloader {
     return plan;
   }
 
-  mapWebLLMProgress(progress: { progress?: number; text?: string }) {
-    const message = progress.text ?? "Loading local model.";
+  mapWebLLMProgress(progress: InitProgressReport) {
+    const message = progress.text || "Loading local model.";
     const lowerMessage = message.toLowerCase();
 
     this.emit({

@@ -25,7 +25,7 @@ export const providerConfigs: ProviderConfig[] = [
     provider: "local",
     label: "Offline",
     requiresApiKey: false,
-    implemented: false,
+    implemented: true,
   },
   {
     provider: "gemini",

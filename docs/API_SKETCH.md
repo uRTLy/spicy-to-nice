@@ -67,7 +67,7 @@ Provider-specific implementation details should live behind adapters:
 
 The prompt builder should be separate from both the UI and provider adapters. Local model selection should read from `src/ai/localModels.json`, not hardcoded strings in components.
 
-The first working adapter is OpenAI. Gemini and Anthropic should keep the same interface and can be added without changing UI state shape.
+The first hosted working adapter is OpenAI. Offline WebLLM also uses this interface. Gemini and Anthropic should keep the same interface and can be added without changing UI state shape.
 
 ## Local Model Download Abstraction
 
@@ -85,6 +85,8 @@ The downloader is responsible for:
 - Building the WebLLM app config from the typed model catalog.
 - Emitting download/loading progress for React.
 - Keeping model URLs and model-library URLs out of the UI.
+
+The runtime path lives in `src/ai/webllmAdapter.ts` and uses a worker-backed WebLLM engine so model loading and generation do not block the React UI thread.
 
 ## Prompt Builder Responsibilities
 

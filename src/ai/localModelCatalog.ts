@@ -1,3 +1,4 @@
+import type { AppConfig } from "@mlc-ai/web-llm";
 import localModels from "./localModels.json";
 
 export type LocalModelSizeClass = "tiny" | "small" | "medium" | "large";
@@ -58,7 +59,7 @@ export function buildWebLLMModelRecord(model: LocalModelRecord) {
   };
 }
 
-export function buildWebLLMAppConfig(model: LocalModelRecord) {
+export function buildWebLLMAppConfig(model: LocalModelRecord): AppConfig {
   return {
     cacheBackend: "cache",
     model_list: [buildWebLLMModelRecord(model)],

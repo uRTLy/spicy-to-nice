@@ -10,6 +10,7 @@
     "export:conversation": "node scripts/export-codex-conversation.mjs"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "0.2.83",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

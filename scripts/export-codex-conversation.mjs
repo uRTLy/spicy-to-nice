@@ -6,7 +6,7 @@ const DEFAULT_SOURCE =
     process.env.HOME ?? "~",
     ".codex/sessions/2026/05/18/rollout-2026-05-18T15-14-20-019e3b39-220f-7882-a4a8-dbb908a0ce24.jsonl",
   );
-const DEFAULT_OUT_DIR = "public/conversation";
+const DEFAULT_OUT_DIR = "public/transcript";
 
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, allArgs) => {
@@ -94,10 +94,11 @@ await writeFile(
   [
     "# Conversation Export",
     "",
-    "This folder contains a sanitized viewer for the Codex conversation used to build Spicy-to-Nice.",
+    "This folder contains sanitized transcript data for the Codex conversation used to build Spicy-to-Nice.",
     "",
-    "- `index.html` is a static viewer.",
+    "- `index.html` is a static fallback viewer.",
     "- `conversation.json` contains visible user/assistant messages only.",
+    "- The primary in-app viewer is the React route at `/conversation`.",
     "- Hidden instructions, reasoning, tool payloads, and secrets are excluded or redacted.",
     "",
     "Regenerate with:",

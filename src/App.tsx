@@ -1,4 +1,6 @@
-import { useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { ConversationPage } from "./ConversationPage";
+import { llmDownloader, type LLMDownloadProgress } from "./ai/llmDownloader";
 import {
   defaultLocalModelId,
   getDefaultLocalModel,
@@ -288,10 +290,55 @@ function resizeComposerInput(element: HTMLTextAreaElement) {
   element.style.height = `${Math.min(element.scrollHeight, 150)}px`;
 }
 
+type AppRoute = "translator" | "conversation";
+
+function readRoute(): AppRoute {
+  return window.location.pathname.replace(/\/+$/, "").endsWith("/conversation")
+    ? "conversation"
+    : "translator";
+}
+
+function buildRoutePath(route: AppRoute) {
+  const base = import.meta.env.BASE_URL || "/";
+
+  if (route === "translator") {
+    return base;
+  }
+
+  return `${base}${base.endsWith("/") ? "" : "/"}conversation`;
+}
+
 export function App() {
+  const [route, setRoute] = useState<AppRoute>(() => readRoute());
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(readRoute());
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  function navigate(routeName: AppRoute) {
+    window.history.pushState({ route: routeName }, "", buildRoutePath(routeName));
+    setRoute(routeName);
+    window.scrollTo({ top: 0 });
+  }
+
+  if (route === "conversation") {
+    return <ConversationPage onBack={() => navigate("translator")} />;
+  }
+
+  return <TranslatorApp onOpenConversation={() => navigate("conversation")} />;
+}
+
+type TranslatorAppProps = {
+  onOpenConversation: () => void;
+};
+
+function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [localProgress, setLocalProgress] = useState<LLMDownloadProgress | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const conversationUrl = `${import.meta.env.BASE_URL}conversation/`;
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
   const defaultLocalModel = getDefaultLocalModel();
   const selectedLocalModel = getLocalModel(state.localModelId) ?? defaultLocalModel;
@@ -302,6 +349,13 @@ export function App() {
   const sendButtonLabel =
     state.mode === "ranting" ? "Capture thought" : "Generate polished feedback";
   const canCopy = state.output.status === "success" && state.output.text.trim().length > 0;
+
+  useEffect(() => {
+    const unsubscribe = llmDownloader.subscribe(setLocalProgress);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   function addSegment() {
     const text = state.draft.trim();
@@ -453,6 +507,14 @@ export function App() {
                   {selectedLocalModel.estimatedDownloadMB} MB and needs about{" "}
                   {Math.round(selectedLocalModel.vramRequiredMB)} MB VRAM.
                 </p>
+                {state.provider === "local" && localProgress ? (
+                  <div className="local-progress" aria-live="polite">
+                    <span>{localProgress.message}</span>
+                    {typeof localProgress.progress === "number" ? (
+                      <progress value={localProgress.progress} max={1} />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -490,13 +552,13 @@ export function App() {
             <div>
               <dt>Viewer</dt>
               <dd>
-                <code>/conversation/</code>
+                <code>/conversation</code>
               </dd>
             </div>
             <div>
               <dt>Repo file</dt>
               <dd>
-                <code>public/conversation/index.html</code>
+                <code>src/ConversationPage.tsx</code>
               </dd>
             </div>
             <div>
@@ -506,9 +568,9 @@ export function App() {
               </dd>
             </div>
           </dl>
-          <a className="transcript-button" href={conversationUrl}>
+          <button className="transcript-button" type="button" onClick={onOpenConversation}>
             Open transcript
-          </a>
+          </button>
         </section>
 
         {state.mode === "ranting" ? (

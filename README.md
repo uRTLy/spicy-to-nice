@@ -33,7 +33,7 @@ Hosted AI providers under consideration:
 Future options:
 
 - Serverless proxy for app-owned protected API keys.
-- Local browser inference via WebLLM/WebGPU as an experimental privacy mode.
+- More local browser inference options after the first WebLLM/WebGPU path.
 
 ## Repository Structure
 
@@ -67,12 +67,12 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Ranting Mode behaves like a message composer: Enter captures each thought, then Generate combines the saved thread.
 - Output shows before and after drafts with a copy button.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
-- Local WebLLM planning code now has a typed model catalog and downloader abstraction, but the runtime is intentionally not wired into generation yet.
-- A sanitized Codex build transcript is available at `/conversation/` in the running app.
+- Offline generation is wired through WebLLM/WebGPU with a worker-backed local adapter and typed model catalog.
+- A sanitized Codex build transcript is available at `/conversation` inside the running app.
 
 ## Conversation Export
 
-This repo includes a static sanitized viewer for the Codex conversation that built the prototype.
+This repo includes a sanitized transcript export for the in-app Codex conversation page.
 
 ```bash
 npm run export:conversation

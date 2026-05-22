@@ -4,8 +4,8 @@ import type {
   Provider,
 } from "../feedbackTypes";
 import { FeedbackGenerationError } from "./errors";
-import { llmDownloader } from "./llmDownloader";
 import { buildFeedbackPrompt } from "./prompt";
+import { generateWithWebLLM } from "./webllmAdapter";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_MODEL = "gpt-5-mini";
@@ -69,13 +69,7 @@ export const openAIAdapter: FeedbackProviderAdapter = {
 
 export const localWebLLMAdapter: FeedbackProviderAdapter = {
   provider: "local",
-  async generate(input) {
-    const plan = await llmDownloader.prepare(input.localModelId);
-
-    throw new FeedbackGenerationError(
-      `Offline model plumbing is ready, but WebLLM runtime is not installed yet. ${plan.model.label} would download about ${plan.estimatedDownloadMB} MB on first use.`,
-    );
-  },
+  generate: generateWithWebLLM,
 };
 
 export function unavailableAdapter(providerName: string, provider: Provider): FeedbackProviderAdapter {

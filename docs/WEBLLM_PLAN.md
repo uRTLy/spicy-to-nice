@@ -48,6 +48,16 @@ The codebase now has the first abstraction layer in place:
 - `src/ai/llmDownloader.ts`: local-model download/support/progress planning layer.
 - `src/ai/providerAdapters.ts`: hosted/local provider adapter seam.
 
+## Implementation Status
+
+The app now has a first working Offline provider path:
+
+- `@mlc-ai/web-llm` is pinned to `0.2.83`.
+- `src/ai/webllm.worker.ts` hosts WebLLM in a module worker.
+- `src/ai/webllmAdapter.ts` dynamically imports WebLLM, initializes the selected model, and calls the same prompt builder used by OpenAI.
+- `src/ai/llmDownloader.ts` emits support, download, load, ready, and error progress for the React UI.
+- The provider selector no longer marks Offline as "soon"; the first real generation attempt downloads the selected model.
+
 ## Implementation Steps
 
 1. Install and pin `@mlc-ai/web-llm`.
@@ -119,13 +129,11 @@ Better quality candidates for later:
 Phase 1:
 
 - Keep BYOK OpenAI as the reliable demo path.
-- Document Offline as planned.
+- Document Offline as experimental because browser/device support still varies.
 
 Phase 2:
 
-- Add Offline provider behind a feature flag or visible experimental label.
-- Load one pinned small model.
-- Add support/progress UI.
+- Done: add Offline provider, load one pinned small model by default, and add support/progress UI.
 
 Phase 3:
 
