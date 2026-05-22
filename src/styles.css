@@ -55,20 +55,6 @@ h1 {
   letter-spacing: 0;
 }
 
-.transcript-link {
-  display: inline-block;
-  margin-top: 10px;
-  color: #43625c;
-  font-size: 0.92rem;
-  font-weight: 700;
-  text-decoration-color: rgba(67, 98, 92, 0.35);
-  text-underline-offset: 4px;
-}
-
-.transcript-link:hover {
-  color: #0f766e;
-}
-
 h2 {
   margin: 0;
   font-size: clamp(1.35rem, 3vw, 2.2rem);
@@ -176,6 +162,71 @@ button.active {
 .mode-switch button {
   min-width: 130px;
   border-color: transparent;
+}
+
+.transcript-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px) auto;
+  gap: 16px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border: 1px solid #d7dfdc;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transcript-card h2 {
+  font-size: 1.25rem;
+}
+
+.transcript-card p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: #6d6257;
+  line-height: 1.45;
+}
+
+.transcript-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.transcript-card dt {
+  color: #6d6257;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.transcript-card dd {
+  margin: 2px 0 0;
+  color: #20201f;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.transcript-card code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.transcript-button {
+  display: inline-grid;
+  min-height: 42px;
+  place-items: center;
+  padding: 0 16px;
+  border: 1px solid #0f766e;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.transcript-button:hover {
+  background: #0c615b;
 }
 
 .flow-banner {
@@ -637,6 +688,10 @@ select:focus-visible {
   }
 
   .provider-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .transcript-card {
     grid-template-columns: 1fr;
   }
 

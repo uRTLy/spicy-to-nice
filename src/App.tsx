@@ -67,6 +67,8 @@ type AppAction =
   | { type: "copy_reset" };
 
 const initialOutputText = "Your polished feedback will appear here.";
+const conversationSourcePath =
+  "~/.codex/sessions/2026/05/18/rollout-2026-05-18T15-14-20-019e3b39-220f-7882-a4a8-dbb908a0ce24.jsonl";
 
 const initialState: AppState = {
   mode: "single",
@@ -389,9 +391,6 @@ export function App() {
           <div>
             <p className="eyebrow">Spicy-to-Nice</p>
             <h1>Feedback without the flames.</h1>
-            <a className="transcript-link" href={conversationUrl}>
-              Build transcript
-            </a>
           </div>
           <div className="provider-controls">
             <div className="provider-field">
@@ -477,6 +476,40 @@ export function App() {
             Ranting
           </button>
         </div>
+
+        <section className="transcript-card" aria-label="Build transcript">
+          <div>
+            <p className="eyebrow">Build transcript</p>
+            <h2>See the Codex conversation behind this app</h2>
+            <p>
+              A sanitized viewer is bundled with the app. It keeps visible user and
+              assistant messages, while omitting tool output, hidden context, and secrets.
+            </p>
+          </div>
+          <dl>
+            <div>
+              <dt>Viewer</dt>
+              <dd>
+                <code>/conversation/</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Repo file</dt>
+              <dd>
+                <code>public/conversation/index.html</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Sanitized from</dt>
+              <dd>
+                <code>{conversationSourcePath}</code>
+              </dd>
+            </div>
+          </dl>
+          <a className="transcript-button" href={conversationUrl}>
+            Open transcript
+          </a>
+        </section>
 
         {state.mode === "ranting" ? (
           <div className="flow-banner" aria-live="polite">
