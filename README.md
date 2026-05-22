@@ -42,6 +42,7 @@ docs/
   AI-team-take-home-test.pdf
   API_SKETCH.md
   PRODUCT_IDEA.md
+  PRODUCT_REVIEW.md
   TECH_PLAN.md
   WEBLLM_PLAN.md
 src/
@@ -66,6 +67,7 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Ranting Mode behaves like a message composer: Enter captures each thought, then Generate combines the saved thread.
 - Output shows before and after drafts with a copy button.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
+- Local WebLLM planning code now has a typed model catalog and downloader abstraction, but the runtime is intentionally not wired into generation yet.
 
 ## Notes on API Keys
 

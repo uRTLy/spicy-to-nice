@@ -4,17 +4,15 @@ import type {
   Provider,
   ProviderConfig,
 } from "../feedbackTypes";
-import { buildFeedbackPrompt } from "./prompt";
+import { FeedbackGenerationError } from "./errors";
+import {
+  localWebLLMAdapter,
+  openAIAdapter,
+  unavailableAdapter,
+  type FeedbackProviderAdapter,
+} from "./providerAdapters";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const OPENAI_MODEL = "gpt-5-mini";
-
-export class FeedbackGenerationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "FeedbackGenerationError";
-  }
-}
+export { FeedbackGenerationError } from "./errors";
 
 export const providerConfigs: ProviderConfig[] = [
   {
@@ -22,6 +20,12 @@ export const providerConfigs: ProviderConfig[] = [
     label: "OpenAI",
     requiresApiKey: true,
     implemented: true,
+  },
+  {
+    provider: "local",
+    label: "Offline",
+    requiresApiKey: false,
+    implemented: false,
   },
   {
     provider: "gemini",
@@ -37,166 +41,36 @@ export const providerConfigs: ProviderConfig[] = [
   },
 ];
 
+const adapters: Record<Provider, FeedbackProviderAdapter> = {
+  openai: openAIAdapter,
+  local: localWebLLMAdapter,
+  gemini: unavailableAdapter("Gemini", "gemini"),
+  anthropic: unavailableAdapter("Anthropic", "anthropic"),
+};
+
 export async function generateFeedback(
   input: GenerateFeedbackInput,
 ): Promise<GenerateFeedbackOutput> {
   const segments = input.segments.map((segment) => segment.trim()).filter(Boolean);
+  const config = providerConfigs.find((item) => item.provider === input.provider);
 
   if (segments.length === 0) {
     throw new FeedbackGenerationError("Add feedback before generating.");
   }
 
-  if (!input.apiKey?.trim()) {
-    throw new FeedbackGenerationError("Enter an API key for the selected provider.");
+  if (!config) {
+    throw new FeedbackGenerationError(`Unsupported provider: ${input.provider}`);
   }
 
-  switch (input.provider) {
-    case "openai":
-      return openaiAdapter({ ...input, segments, apiKey: input.apiKey.trim() });
-    case "gemini":
-      return unavailableAdapter("Gemini");
-    case "anthropic":
-      return unavailableAdapter("Anthropic");
-    default:
-      return assertNever(input.provider);
+  if (config.requiresApiKey && !input.apiKey?.trim()) {
+    throw new FeedbackGenerationError(`Enter an API key for ${config.label}.`);
   }
-}
 
-async function openaiAdapter(
-  input: GenerateFeedbackInput & { apiKey: string },
-): Promise<GenerateFeedbackOutput> {
-  const prompt = buildFeedbackPrompt(input);
-
-  let response: Response;
-
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        instructions: prompt.instructions,
-        input: prompt.input,
-      }),
-    });
-  } catch {
+  if (!config.implemented) {
     throw new FeedbackGenerationError(
-      "Could not reach OpenAI. Check your connection and try again.",
+      `${config.label} is planned but not fully wired yet. Use OpenAI for this prototype.`,
     );
   }
 
-  const payload = await safeJson(response);
-
-  if (!response.ok) {
-    throw new FeedbackGenerationError(readProviderError(payload, "OpenAI"));
-  }
-
-  const polishedText = extractOpenAIText(payload);
-
-  if (!polishedText) {
-    throw new FeedbackGenerationError(
-      "OpenAI returned an empty response. Try again with more specific input.",
-    );
-  }
-
-  return { polishedText };
-}
-
-function unavailableAdapter(providerName: string): Promise<GenerateFeedbackOutput> {
-  throw new FeedbackGenerationError(
-    `${providerName} is not wired yet. Use OpenAI for this prototype.`,
-  );
-}
-
-async function safeJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-function readProviderError(payload: unknown, providerName: string) {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "error" in payload &&
-    payload.error &&
-    typeof payload.error === "object" &&
-    "message" in payload.error &&
-    typeof payload.error.message === "string"
-  ) {
-    const message = payload.error.message;
-    const lowerMessage = message.toLowerCase();
-
-    if (lowerMessage.includes("quota") || lowerMessage.includes("billing")) {
-      return `${providerName} says this key has no remaining quota or billing is not enabled. Try a key from a project with API credits, or lower the project budget after testing.`;
-    }
-
-    if (lowerMessage.includes("invalid api key") || lowerMessage.includes("incorrect api key")) {
-      return `${providerName} says this API key is invalid. Check that the key was copied fully and belongs to the selected project.`;
-    }
-
-    return `${providerName} rejected the request: ${message.replace(/https?:\/\/\S+/g, "").trim()}`;
-  }
-
-  return `${providerName} rejected the request. Check the key and try again.`;
-}
-
-function extractOpenAIText(payload: unknown): string {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "output_text" in payload &&
-    typeof payload.output_text === "string"
-  ) {
-    return payload.output_text.trim();
-  }
-
-  if (!payload || typeof payload !== "object" || !("output" in payload)) {
-    return "";
-  }
-
-  const { output } = payload;
-
-  if (!Array.isArray(output)) {
-    return "";
-  }
-
-  return output
-    .flatMap((item) => {
-      if (!item || typeof item !== "object" || !("content" in item)) {
-        return [];
-      }
-
-      const { content } = item;
-
-      if (!Array.isArray(content)) {
-        return [];
-      }
-
-      return content
-        .map((contentItem) => {
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "text" in contentItem &&
-            typeof contentItem.text === "string"
-          ) {
-            return contentItem.text;
-          }
-
-          return "";
-        })
-        .filter(Boolean);
-    })
-    .join("\n")
-    .trim();
-}
-
-function assertNever(value: never): never {
-  throw new FeedbackGenerationError(`Unsupported provider: ${value}`);
+  return adapters[input.provider].generate({ ...input, segments });
 }

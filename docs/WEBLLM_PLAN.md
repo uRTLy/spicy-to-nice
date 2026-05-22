@@ -41,6 +41,13 @@ Validation changes:
 - Hide or disable the API key field when Offline is selected.
 - Check `navigator.gpu` before attempting model initialization.
 
+The codebase now has the first abstraction layer in place:
+
+- `src/ai/localModels.json`: extendable model catalog with URLs, download estimates, VRAM estimates, and model metadata.
+- `src/ai/localModelCatalog.ts`: typed helpers for reading the catalog and building WebLLM app config records.
+- `src/ai/llmDownloader.ts`: local-model download/support/progress planning layer.
+- `src/ai/providerAdapters.ts`: hosted/local provider adapter seam.
+
 ## Implementation Steps
 
 1. Install and pin `@mlc-ai/web-llm`.
@@ -83,11 +90,12 @@ Default candidate:
 - `Llama-3.2-1B-Instruct-q4f16_1-MLC`
 - Practical quality floor for short English rewrite tasks.
 - Current WebLLM config lists roughly 879 MB VRAM required.
+- Hugging Face file metadata totals roughly 672 MB downloaded.
 
 Lower-end compatibility candidate:
 
 - `SmolLM2-360M-Instruct-q4f16_1-MLC`
-- Smaller and more likely to load on constrained devices.
+- Smaller and more likely to load on constrained devices: roughly 198 MB downloaded and 376 MB VRAM required.
 - Lower quality for nuance, tone preservation, and interpersonal context.
 
 Better quality candidates for later:
@@ -95,7 +103,7 @@ Better quality candidates for later:
 - `Llama-3.2-3B-Instruct-q4f16_1-MLC`
 - `Qwen2.5-1.5B-Instruct-q4f16_1-MLC`
 
-These should be advanced options because they need more memory and patience.
+`Qwen2.5-1.5B-Instruct-q4f16_1-MLC` is an especially interesting quality candidate: roughly 840 MB downloaded and 1.63 GB VRAM required. `Llama-3.2-3B-Instruct-q4f16_1-MLC` is heavier at roughly 1.73 GB downloaded and 2.26 GB VRAM required. These should be advanced options because they need more memory and patience.
 
 ## Risks
 

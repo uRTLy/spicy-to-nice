@@ -22,7 +22,8 @@ export type Tone =
 export type Provider =
   | "openai"
   | "gemini"
-  | "anthropic";
+  | "anthropic"
+  | "local";
 
 export interface ProviderConfig {
   provider: Provider;
@@ -38,6 +39,7 @@ export interface GenerateFeedbackInput {
   tone: Tone;
   provider: Provider;
   apiKey?: string;
+  localModelId?: string;
 }
 
 export interface GenerateFeedbackOutput {
@@ -61,10 +63,28 @@ Provider-specific implementation details should live behind adapters:
 - `openaiAdapter`
 - `geminiAdapter`
 - `anthropicAdapter`
+- `localWebLLMAdapter`
 
-The prompt builder should be separate from both the UI and provider adapters.
+The prompt builder should be separate from both the UI and provider adapters. Local model selection should read from `src/ai/localModels.json`, not hardcoded strings in components.
 
 The first working adapter is OpenAI. Gemini and Anthropic should keep the same interface and can be added without changing UI state shape.
+
+## Local Model Download Abstraction
+
+Offline generation should flow through an explicit downloader/planner:
+
+```ts
+const plan = llmDownloader.getPlan("llama-3.2-1b-instruct-q4f16_1");
+await llmDownloader.prepare(plan.model.id);
+```
+
+The downloader is responsible for:
+
+- Checking WebGPU support.
+- Exposing estimated download and VRAM requirements.
+- Building the WebLLM app config from the typed model catalog.
+- Emitting download/loading progress for React.
+- Keeping model URLs and model-library URLs out of the UI.
 
 ## Prompt Builder Responsibilities
 

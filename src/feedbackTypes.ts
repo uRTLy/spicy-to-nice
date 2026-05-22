@@ -4,7 +4,7 @@ export type Audience = "manager" | "direct_report" | "peer" | "customer";
 
 export type Tone = "diplomatic" | "warm" | "firm" | "concise";
 
-export type Provider = "openai" | "gemini" | "anthropic";
+export type Provider = "openai" | "gemini" | "anthropic" | "local";
 
 export interface ProviderConfig {
   provider: Provider;
@@ -20,6 +20,7 @@ export interface GenerateFeedbackInput {
   tone: Tone;
   provider: Provider;
   apiKey?: string;
+  localModelId?: string;
 }
 
 export interface GenerateFeedbackOutput {

@@ -1,4 +1,5 @@
 import { useReducer, useRef } from "react";
+import { getDefaultLocalModel } from "./ai/localModelCatalog";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
 import type { Audience, FeedbackMode, Provider, Tone } from "./feedbackTypes";
 
@@ -253,12 +254,12 @@ function getGenerationBlocker(state: AppState) {
     return "Add feedback before generating.";
   }
 
-  if (!state.apiKey.trim()) {
-    return `Enter an API key to generate with ${selectedProvider?.label ?? "this provider"}.`;
-  }
-
   if (selectedProvider && !selectedProvider.implemented) {
     return `${selectedProvider.label} is planned but not wired yet. OpenAI works first.`;
+  }
+
+  if (selectedProvider?.requiresApiKey && !state.apiKey.trim()) {
+    return `Enter an API key to generate with ${selectedProvider.label}.`;
   }
 
   return "";
@@ -272,6 +273,8 @@ function resizeComposerInput(element: HTMLTextAreaElement) {
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
+  const defaultLocalModel = getDefaultLocalModel();
   const generationBlocker = getGenerationBlocker(state);
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
@@ -387,25 +390,35 @@ export function App() {
                 ))}
               </select>
             </div>
-            <div className="api-key-field">
-              <label htmlFor="api-key">API key</label>
-              <input
-                id="api-key"
-                type="password"
-                value={state.apiKey}
-                disabled={state.output.status === "loading"}
-                onChange={(event) =>
-                  dispatch({ type: "set_api_key", apiKey: event.target.value })
-                }
-                placeholder="sk-..."
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <p>
-                Key is kept in memory only and never saved. Use a restricted or
-                revocable key when possible.
-              </p>
-            </div>
+            {selectedProvider?.requiresApiKey ? (
+              <div className="api-key-field">
+                <label htmlFor="api-key">API key</label>
+                <input
+                  id="api-key"
+                  type="password"
+                  value={state.apiKey}
+                  disabled={state.output.status === "loading"}
+                  onChange={(event) =>
+                    dispatch({ type: "set_api_key", apiKey: event.target.value })
+                  }
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <p>
+                  Key is kept in memory only and never saved. Use a restricted or
+                  revocable key when possible.
+                </p>
+              </div>
+            ) : (
+              <div className="api-key-field">
+                <span className="field-label">Local model</span>
+                <p>
+                  Planned default: {defaultLocalModel.label}, about{" "}
+                  {defaultLocalModel.estimatedDownloadMB} MB downloaded on first use.
+                </p>
+              </div>
+            )}
           </div>
         </header>
 
