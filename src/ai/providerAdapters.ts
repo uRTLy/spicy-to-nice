@@ -4,7 +4,8 @@ import type {
   Provider,
 } from "../feedbackTypes";
 import { FeedbackGenerationError } from "./errors";
-import { buildFeedbackPrompt } from "./prompt";
+import { parseFeedbackResponseText } from "./feedbackResponse";
+import { buildFeedbackPrompt, feedbackResponseSchema } from "./prompt";
 import { generateWithWebLLM } from "./webllmAdapter";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -41,6 +42,14 @@ export const openAIAdapter: FeedbackProviderAdapter = {
           model: OPENAI_MODEL,
           instructions: prompt.instructions,
           input: prompt.input,
+          text: {
+            format: {
+              type: "json_schema",
+              name: "feedback_rewrite_variants",
+              strict: true,
+              schema: feedbackResponseSchema,
+            },
+          },
         }),
       });
     } catch {
@@ -55,15 +64,15 @@ export const openAIAdapter: FeedbackProviderAdapter = {
       throw new FeedbackGenerationError(readProviderError(payload, "OpenAI"));
     }
 
-    const polishedText = extractOpenAIText(payload);
+    const responseText = extractOpenAIText(payload);
 
-    if (!polishedText) {
+    if (!responseText) {
       throw new FeedbackGenerationError(
         "OpenAI returned an empty response. Try again with more specific input.",
       );
     }
 
-    return { polishedText };
+    return parseFeedbackResponseText(responseText);
   },
 };
 

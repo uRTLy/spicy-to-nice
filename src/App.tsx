@@ -8,7 +8,7 @@ import {
   supportedLocalModels,
 } from "./ai/localModelCatalog";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
-import type { Audience, FeedbackMode, Provider, Tone } from "./feedbackTypes";
+import type { Audience, FeedbackMode, FeedbackVariant, Provider, Tone } from "./feedbackTypes";
 
 const audiences: Array<{ label: string; value: Audience }> = [
   { label: "Manager", value: "manager" },
@@ -45,6 +45,9 @@ type AppState = {
   draft: string;
   segments: Segment[];
   output: OutputState;
+  variants: FeedbackVariant[];
+  selectedVariantId: string;
+  warnings: string[];
   shortInputConfirmationPending: boolean;
   lastSourceText: string;
   copyStatus: "idle" | "copied" | "failed";
@@ -62,8 +65,9 @@ type AppAction =
   | { type: "remove_segment"; id: string }
   | { type: "short_input_confirmation_requested" }
   | { type: "generation_started" }
-  | { type: "generation_succeeded"; text: string }
+  | { type: "generation_succeeded"; text: string; variants: FeedbackVariant[]; warnings: string[] }
   | { type: "generation_failed"; message: string }
+  | { type: "select_variant"; id: string }
   | { type: "copy_succeeded" }
   | { type: "copy_failed" }
   | { type: "copy_reset" };
@@ -82,6 +86,9 @@ const initialState: AppState = {
   draft: "",
   segments: [],
   output: { status: "idle", text: initialOutputText },
+  variants: [],
+  selectedVariantId: "",
+  warnings: [],
   shortInputConfirmationPending: false,
   lastSourceText: "",
   copyStatus: "idle",
@@ -222,12 +229,16 @@ function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         shortInputConfirmationPending: false,
         copyStatus: "idle",
+        warnings: [],
         output: { status: "loading", text: state.output.text },
       };
     case "generation_succeeded":
       return {
         ...state,
         lastSourceText: getSegmentsForGeneration(state).join("\n\n"),
+        variants: action.variants,
+        selectedVariantId: action.variants[0]?.id ?? "",
+        warnings: action.warnings,
         output: { status: "success", text: action.text },
       };
     case "generation_failed":
@@ -239,6 +250,8 @@ function reducer(state: AppState, action: AppAction): AppState {
           message: action.message,
         },
       };
+    case "select_variant":
+      return { ...state, selectedVariantId: action.id, copyStatus: "idle" };
     case "copy_succeeded":
       return { ...state, copyStatus: "copied" };
     case "copy_failed":
@@ -260,6 +273,18 @@ function getSegmentsForGeneration(state: AppState) {
 
 function getWordCount(segments: string[]) {
   return segments.join(" ").trim().split(/\s+/).filter(Boolean).length;
+}
+
+function getSelectedVariant(state: AppState) {
+  return (
+    state.variants.find((variant) => variant.id === state.selectedVariantId) ??
+    state.variants[0] ??
+    null
+  );
+}
+
+function getDisplayedOutputText(state: AppState) {
+  return getSelectedVariant(state)?.text ?? state.output.text;
 }
 
 function getGenerationBlocker(state: AppState) {
@@ -343,12 +368,14 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
   const defaultLocalModel = getDefaultLocalModel();
   const selectedLocalModel = getLocalModel(state.localModelId) ?? defaultLocalModel;
   const generationBlocker = getGenerationBlocker(state);
+  const selectedVariant = getSelectedVariant(state);
+  const displayedOutputText = getDisplayedOutputText(state);
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
   const canSendDraft = state.mode === "ranting" ? canAddSegment : canGenerate;
   const sendButtonLabel =
     state.mode === "ranting" ? "Capture thought" : "Generate polished feedback";
-  const canCopy = state.output.status === "success" && state.output.text.trim().length > 0;
+  const canCopy = state.output.status === "success" && displayedOutputText.trim().length > 0;
 
   useEffect(() => {
     const unsubscribe = llmDownloader.subscribe(setLocalProgress);
@@ -403,7 +430,12 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
         localModelId: state.localModelId,
       });
 
-      dispatch({ type: "generation_succeeded", text: result.polishedText });
+      dispatch({
+        type: "generation_succeeded",
+        text: result.polishedText,
+        variants: result.variants ?? [],
+        warnings: result.warnings ?? [],
+      });
     } catch (error) {
       dispatch({
         type: "generation_failed",
@@ -430,7 +462,7 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
     }
 
     try {
-      await navigator.clipboard.writeText(state.output.text);
+      await navigator.clipboard.writeText(displayedOutputText);
       dispatch({ type: "copy_succeeded" });
       window.setTimeout(() => dispatch({ type: "copy_reset" }), 1800);
     } catch {
@@ -728,6 +760,11 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
           {state.output.status === "error" ? (
             <p className="error-message">{state.output.message}</p>
           ) : null}
+          {state.warnings.map((warning) => (
+            <p className="notice" key={warning}>
+              {warning}
+            </p>
+          ))}
           {state.output.status === "loading" ? (
             <div className="thinking" aria-live="polite">
               <span />
@@ -744,12 +781,31 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
             </article>
             <article className="output-card after-card">
               <div className="card-toolbar">
-                <span className="card-label">After</span>
+                <span className="card-label">
+                  After{selectedVariant ? ` - ${selectedVariant.label}` : ""}
+                </span>
                 <button type="button" onClick={() => void copyOutput()} disabled={!canCopy}>
                   {state.copyStatus === "copied" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <p>{state.output.text}</p>
+              {state.variants.length > 1 ? (
+                <div className="variant-picker" aria-label="Output variants">
+                  {state.variants.map((variant) => (
+                    <button
+                      className={selectedVariant?.id === variant.id ? "active" : ""}
+                      key={variant.id}
+                      type="button"
+                      onClick={() => dispatch({ type: "select_variant", id: variant.id })}
+                    >
+                      {variant.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <p>{displayedOutputText}</p>
+              {selectedVariant?.useCase ? (
+                <span className="variant-use-case">{selectedVariant.useCase}</span>
+              ) : null}
               {state.copyStatus === "failed" ? (
                 <span className="copy-error">Copy failed. Select the text manually.</span>
               ) : null}

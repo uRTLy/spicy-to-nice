@@ -41,6 +41,7 @@ Future options:
 docs/
   AI-team-take-home-test.pdf
   API_SKETCH.md
+  LLM_OUTPUT_PATTERNS.md
   PRODUCT_IDEA.md
   PRODUCT_REVIEW.md
   TECH_PLAN.md
@@ -66,6 +67,7 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Standard Mode supports Enter to generate and Shift+Enter for multiline text.
 - Ranting Mode behaves like a message composer: Enter captures each thought, then Generate combines the saved thread.
 - Output shows before and after drafts with a copy button.
+- Generation returns balanced, direct, and concise variants for the user to choose from.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
 - Offline generation is wired through WebLLM/WebGPU with a worker-backed local adapter and typed model catalog.
 - A sanitized Codex build transcript is available at `/conversation` inside the running app.

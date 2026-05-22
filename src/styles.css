@@ -790,6 +790,37 @@ select:focus-visible {
   color: #182220;
 }
 
+.variant-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.variant-picker button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-color: rgba(158, 227, 213, 0.48);
+  border-radius: 999px;
+  background: transparent;
+  color: #dffbf5;
+  font-size: 0.86rem;
+}
+
+.variant-picker button.active {
+  border-color: #9ee3d5;
+  background: #9ee3d5;
+  color: #182220;
+}
+
+.variant-use-case {
+  display: block;
+  margin-top: 12px;
+  color: #9ee3d5;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
 .copy-error {
   display: block;
   margin-top: 10px;

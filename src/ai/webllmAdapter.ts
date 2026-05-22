@@ -4,11 +4,12 @@ import type {
 } from "@mlc-ai/web-llm";
 import type { GenerateFeedbackOutput } from "../feedbackTypes";
 import { FeedbackGenerationError } from "./errors";
+import { parseFeedbackResponseText } from "./feedbackResponse";
 import { llmDownloader } from "./llmDownloader";
-import { buildFeedbackPrompt } from "./prompt";
+import { buildFeedbackPrompt, feedbackResponseSchema } from "./prompt";
 import type { NormalizedGenerateFeedbackInput } from "./providerAdapters";
 
-const MAX_LOCAL_OUTPUT_TOKENS = 320;
+const MAX_LOCAL_OUTPUT_TOKENS = 620;
 const LOCAL_TEMPERATURE = 0.3;
 
 type EngineEntry = {
@@ -23,11 +24,16 @@ export async function generateWithWebLLM(
 ): Promise<GenerateFeedbackOutput> {
   const { engine } = await getLocalEngine(input.localModelId);
   const prompt = buildFeedbackPrompt(input);
+  const localInstructions = [
+    prompt.instructions,
+    "Return only valid JSON, with no markdown fences.",
+    `Use this JSON schema: ${JSON.stringify(feedbackResponseSchema)}`,
+  ].join("\n");
 
   try {
     const response = await engine.chat.completions.create({
       messages: [
-        { role: "system", content: prompt.instructions },
+        { role: "system", content: localInstructions },
         { role: "user", content: prompt.input },
       ],
       temperature: LOCAL_TEMPERATURE,
@@ -35,15 +41,15 @@ export async function generateWithWebLLM(
       stream: false,
     });
 
-    const polishedText = response.choices[0]?.message.content?.trim() ?? "";
+    const responseText = response.choices[0]?.message.content?.trim() ?? "";
 
-    if (!polishedText) {
+    if (!responseText) {
       throw new FeedbackGenerationError(
         "The local model returned an empty response. Try again with more context or use OpenAI.",
       );
     }
 
-    return { polishedText };
+    return parseFeedbackResponseText(responseText);
   } catch (error) {
     throw normalizeLocalGenerationError(error);
   }

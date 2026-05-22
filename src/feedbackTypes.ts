@@ -25,7 +25,15 @@ export interface GenerateFeedbackInput {
 
 export interface GenerateFeedbackOutput {
   polishedText: string;
+  variants?: FeedbackVariant[];
   summary?: string;
   actionItems?: string[];
   warnings?: string[];
+}
+
+export interface FeedbackVariant {
+  id: string;
+  label: string;
+  text: string;
+  useCase: string;
 }

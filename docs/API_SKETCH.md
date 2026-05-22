@@ -44,9 +44,17 @@ export interface GenerateFeedbackInput {
 
 export interface GenerateFeedbackOutput {
   polishedText: string;
+  variants?: FeedbackVariant[];
   summary?: string;
   actionItems?: string[];
   warnings?: string[];
+}
+
+export interface FeedbackVariant {
+  id: string;
+  label: string;
+  text: string;
+  useCase: string;
 }
 ```
 
@@ -98,6 +106,9 @@ The prompt builder should:
 - Ask the model to preserve the core message.
 - Ask the model to remove insults, emotional excess, and unclear phrasing.
 - Ask the model not to invent facts.
+- Ask for direct sendable output, not commentary about the transformation.
+- Treat Ranting Mode segments as one user's chronological notes, not multiple speakers.
+- Return balanced, direct, and concise variants.
 
 ## Ranting Mode Handling
 
