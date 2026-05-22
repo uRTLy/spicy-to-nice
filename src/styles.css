@@ -474,19 +474,76 @@ select:focus-visible {
   border-color: #9ccfc5;
 }
 
-pre {
-  min-height: 150px;
+.output-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+.output-card {
+  min-height: 180px;
   margin: 0;
-  padding: 18px;
+  padding: 16px;
   overflow: auto;
+  border: 1px solid #d7dfdc;
   border-radius: 8px;
-  background: #182220;
-  color: #f7fffb;
-  white-space: pre-wrap;
   line-height: 1.55;
   transition:
     background 180ms ease,
-    color 180ms ease;
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.before-card {
+  background: #f8fbfa;
+  color: #20201f;
+}
+
+.after-card {
+  border-color: #182220;
+  background: #182220;
+  color: #f7fffb;
+}
+
+.output-card p {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.card-label {
+  color: #e2573f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.after-card .card-label {
+  color: #9ee3d5;
+}
+
+.card-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-toolbar button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #182220;
+}
+
+.copy-error {
+  display: block;
+  margin-top: 10px;
+  color: #ffd0c8;
+  font-size: 0.86rem;
 }
 
 @keyframes segment-pop {
@@ -578,6 +635,10 @@ pre {
   }
 
   .choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .output-grid {
     grid-template-columns: 1fr;
   }
 }

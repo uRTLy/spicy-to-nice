@@ -36,6 +36,9 @@ type AppState = {
   draft: string;
   segments: Segment[];
   output: OutputState;
+  shortInputConfirmationPending: boolean;
+  lastSourceText: string;
+  copyStatus: "idle" | "copied" | "failed";
 };
 
 type AppAction =
@@ -47,9 +50,13 @@ type AppAction =
   | { type: "set_draft"; draft: string }
   | { type: "add_segment"; segment: Segment }
   | { type: "remove_segment"; id: string }
+  | { type: "short_input_confirmation_requested" }
   | { type: "generation_started" }
   | { type: "generation_succeeded"; text: string }
-  | { type: "generation_failed"; message: string };
+  | { type: "generation_failed"; message: string }
+  | { type: "copy_succeeded" }
+  | { type: "copy_failed" }
+  | { type: "copy_reset" };
 
 const initialOutputText = "Your polished feedback will appear here.";
 
@@ -62,6 +69,9 @@ const initialState: AppState = {
   draft: "",
   segments: [],
   output: { status: "idle", text: initialOutputText },
+  shortInputConfirmationPending: false,
+  lastSourceText: "",
+  copyStatus: "idle",
 };
 
 function clearError(output: OutputState): OutputState {
@@ -132,36 +142,73 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, mode: action.mode, output: clearError(state.output) };
     }
     case "set_audience":
-      return { ...state, audience: action.audience, output: clearError(state.output) };
+      return {
+        ...state,
+        audience: action.audience,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
     case "set_tone":
-      return { ...state, tone: action.tone, output: clearError(state.output) };
+      return {
+        ...state,
+        tone: action.tone,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
     case "set_provider":
-      return { ...state, provider: action.provider, output: clearError(state.output) };
+      return {
+        ...state,
+        provider: action.provider,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
     case "set_api_key":
-      return { ...state, apiKey: action.apiKey, output: clearError(state.output) };
+      return {
+        ...state,
+        apiKey: action.apiKey,
+        output: clearError(state.output),
+      };
     case "set_draft":
-      return { ...state, draft: action.draft, output: clearError(state.output) };
+      return {
+        ...state,
+        draft: action.draft,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
     case "add_segment":
       return {
         ...state,
         draft: "",
         segments: [...state.segments, action.segment],
+        shortInputConfirmationPending: false,
         output: clearError(state.output),
       };
     case "remove_segment":
       return {
         ...state,
         segments: state.segments.filter((segment) => segment.id !== action.id),
+        shortInputConfirmationPending: false,
         output: clearError(state.output),
       };
+    case "short_input_confirmation_requested":
+      return { ...state, shortInputConfirmationPending: true, output: clearError(state.output) };
     case "generation_started":
       if (state.output.status === "loading") {
         return state;
       }
 
-      return { ...state, output: { status: "loading", text: state.output.text } };
+      return {
+        ...state,
+        shortInputConfirmationPending: false,
+        copyStatus: "idle",
+        output: { status: "loading", text: state.output.text },
+      };
     case "generation_succeeded":
-      return { ...state, output: { status: "success", text: action.text } };
+      return {
+        ...state,
+        lastSourceText: getSegmentsForGeneration(state).join("\n\n"),
+        output: { status: "success", text: action.text },
+      };
     case "generation_failed":
       return {
         ...state,
@@ -171,6 +218,12 @@ function reducer(state: AppState, action: AppAction): AppState {
           message: action.message,
         },
       };
+    case "copy_succeeded":
+      return { ...state, copyStatus: "copied" };
+    case "copy_failed":
+      return { ...state, copyStatus: "failed" };
+    case "copy_reset":
+      return { ...state, copyStatus: "idle" };
     default:
       return state;
   }
@@ -182,6 +235,10 @@ function getSegmentsForGeneration(state: AppState) {
   }
 
   return state.draft.trim() ? [state.draft.trim()] : [];
+}
+
+function getWordCount(segments: string[]) {
+  return segments.join(" ").trim().split(/\s+/).filter(Boolean).length;
 }
 
 function getGenerationBlocker(state: AppState) {
@@ -221,6 +278,7 @@ export function App() {
   const canSendDraft = state.mode === "ranting" ? canAddSegment : canGenerate;
   const sendButtonLabel =
     state.mode === "ranting" ? "Capture thought" : "Generate polished feedback";
+  const canCopy = state.output.status === "success" && state.output.text.trim().length > 0;
 
   function addSegment() {
     const text = state.draft.trim();
@@ -243,6 +301,11 @@ export function App() {
     const pendingRantSegment = state.mode === "ranting" ? state.draft.trim() : "";
 
     if (generationBlocker || segments.length === 0) {
+      return;
+    }
+
+    if (getWordCount(segments) < 8 && !state.shortInputConfirmationPending) {
+      dispatch({ type: "short_input_confirmation_requested" });
       return;
     }
 
@@ -281,6 +344,20 @@ export function App() {
     }
 
     void generate();
+  }
+
+  async function copyOutput() {
+    if (!canCopy) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(state.output.text);
+      dispatch({ type: "copy_succeeded" });
+      window.setTimeout(() => dispatch({ type: "copy_reset" }), 1800);
+    } catch {
+      dispatch({ type: "copy_failed" });
+    }
   }
 
   return (
@@ -497,6 +574,12 @@ export function App() {
           {generationBlocker && state.output.status !== "loading" ? (
             <p className="notice">{generationBlocker}</p>
           ) : null}
+          {state.shortInputConfirmationPending ? (
+            <p className="notice">
+              This is pretty short. Add a little more context for a useful rewrite, or press
+              Generate again to use it as-is.
+            </p>
+          ) : null}
           {state.output.status === "error" ? (
             <p className="error-message">{state.output.message}</p>
           ) : null}
@@ -506,7 +589,27 @@ export function App() {
               Reading the spice, finding the useful signal...
             </div>
           ) : null}
-          <pre>{state.output.text}</pre>
+          <div className="output-grid">
+            <article className="output-card before-card">
+              <div className="card-label">Before</div>
+              <p>
+                {state.lastSourceText ||
+                  "Your original feedback will be captured here after generation."}
+              </p>
+            </article>
+            <article className="output-card after-card">
+              <div className="card-toolbar">
+                <span className="card-label">After</span>
+                <button type="button" onClick={() => void copyOutput()} disabled={!canCopy}>
+                  {state.copyStatus === "copied" ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p>{state.output.text}</p>
+              {state.copyStatus === "failed" ? (
+                <span className="copy-error">Copy failed. Select the text manually.</span>
+              ) : null}
+            </article>
+          </div>
         </section>
       </section>
     </main>

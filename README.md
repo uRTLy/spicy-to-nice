@@ -43,6 +43,7 @@ docs/
   API_SKETCH.md
   PRODUCT_IDEA.md
   TECH_PLAN.md
+  WEBLLM_PLAN.md
 src/
   App.tsx
   main.tsx
@@ -54,6 +55,17 @@ src/
 npm install
 npm run dev
 ```
+
+For local testing, open the Vite URL, paste a temporary provider key into the API key field, and try both Standard Mode and Ranting Mode. The app keeps the key in memory only, so refreshing the page clears it.
+
+## Current Prototype
+
+- OpenAI browser BYOK generation is wired.
+- Gemini and Anthropic are documented placeholders behind the same provider abstraction.
+- Standard Mode supports Enter to generate and Shift+Enter for multiline text.
+- Ranting Mode behaves like a message composer: Enter captures each thought, then Generate combines the saved thread.
+- Output shows before and after drafts with a copy button.
+- Very short input asks for confirmation before generating, so terse tests still work when intentional.
 
 ## Notes on API Keys
 

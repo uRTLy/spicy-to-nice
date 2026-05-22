@@ -57,7 +57,7 @@ The proxy should expose a narrow generation endpoint and keep provider-specific 
 
 ## Future Local Model Option
 
-Local browser inference is a research track, not v1 scope.
+Local browser inference is a research track, not v1 scope. See `docs/WEBLLM_PLAN.md` for the dedicated implementation plan.
 
 Candidate technology:
 
@@ -76,6 +76,14 @@ Risks:
 - Browser and device compatibility.
 - Quality may be weaker than hosted commercial models for nuanced rewriting.
 - More complexity than needed for the first repo milestone.
+
+Recommended first implementation shape:
+
+- Add an explicit Offline/WebLLM provider rather than a silent fallback.
+- Dynamically import WebLLM only when Offline is selected.
+- Use a worker-backed singleton so model loading and generation do not freeze the UI.
+- Start with a small pinned model and clear first-run download messaging.
+- Fall back gently to BYOK providers when WebGPU is unavailable or model loading fails.
 
 ## Minimal Scaffold
 

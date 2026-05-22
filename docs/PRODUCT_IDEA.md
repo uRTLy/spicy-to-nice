@@ -14,6 +14,7 @@ Expected flow:
 2. User selects the intended audience.
 3. User selects the desired tone.
 4. App generates one polished feedback draft.
+5. App shows the original input and polished output side by side.
 
 Audience options:
 
@@ -59,6 +60,7 @@ Prototype design decisions:
 - Pressing Generate in Ranting Mode should include the current unsaved segment.
 - Switching from Standard Mode to Ranting Mode should preserve existing text as the first segment.
 - Switching from Ranting Mode back to Standard Mode should concatenate saved segments into the textarea.
+- Very short input should ask for confirmation before generation rather than blocking the user.
 
 Important behavior:
 
@@ -84,3 +86,13 @@ The output should not:
 - Over-soften legitimate concerns.
 - Make the user sound fake or corporate.
 - Include insults, accusations, or emotional dumping.
+
+## Output Experience
+
+The result area should make the transformation easy to trust:
+
+- Show the raw source text as "Before."
+- Show the polished rewrite as "After."
+- Provide a copy button for the finished draft.
+- Keep provider errors visible without clearing the user's writing.
+- If the input is unrelated or lacks feedback context, nudge the user to add the situation, impact, and desired change instead of inventing a fake rewrite.

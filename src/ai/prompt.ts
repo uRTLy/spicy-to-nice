@@ -43,6 +43,7 @@ export function buildFeedbackPrompt({
       "Remove insults, name-calling, venting, exaggeration, and unclear emotional phrasing.",
       "Do not invent facts, promises, timelines, or context that the user did not provide.",
       "If the input is messy or repetitive, consolidate it into one coherent message.",
+      "If the input is not actually feedback or does not contain enough feedback context, return one friendly sentence asking the user to add the situation, impact, and desired change instead of inventing feedback.",
       "Return only the polished feedback text. Do not include labels, analysis, markdown headings, or preambles.",
       audienceInstructions[audience],
       toneInstructions[tone],
