@@ -289,6 +289,7 @@ function resizeComposerInput(element: HTMLTextAreaElement) {
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const conversationUrl = `${import.meta.env.BASE_URL}conversation/`;
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
   const defaultLocalModel = getDefaultLocalModel();
   const selectedLocalModel = getLocalModel(state.localModelId) ?? defaultLocalModel;
@@ -388,6 +389,9 @@ export function App() {
           <div>
             <p className="eyebrow">Spicy-to-Nice</p>
             <h1>Feedback without the flames.</h1>
+            <a className="transcript-link" href={conversationUrl}>
+              Build transcript
+            </a>
           </div>
           <div className="provider-controls">
             <div className="provider-field">

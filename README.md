@@ -68,6 +68,17 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Output shows before and after drafts with a copy button.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
 - Local WebLLM planning code now has a typed model catalog and downloader abstraction, but the runtime is intentionally not wired into generation yet.
+- A sanitized Codex build transcript is available at `/conversation/` in the running app.
+
+## Conversation Export
+
+This repo includes a static sanitized viewer for the Codex conversation that built the prototype.
+
+```bash
+npm run export:conversation
+```
+
+The exporter keeps visible user/assistant messages and omits hidden instructions, reasoning, tool payloads, and raw command output. See `docs/CONVERSATION_EXPORT.md` for the privacy checklist and optional third-party transcript tools.
 
 ## Notes on API Keys
 

@@ -55,6 +55,20 @@ h1 {
   letter-spacing: 0;
 }
 
+.transcript-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #43625c;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration-color: rgba(67, 98, 92, 0.35);
+  text-underline-offset: 4px;
+}
+
+.transcript-link:hover {
+  color: #0f766e;
+}
+
 h2 {
   margin: 0;
   font-size: clamp(1.35rem, 3vw, 2.2rem);

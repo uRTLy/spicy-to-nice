@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spicy-to-Nice Codex Build Conversation</title>
+    <style>
+      :root {
+        color: #20201f;
+        background: #f4f7f5;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      header {
+        display: grid;
+        gap: 12px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid #d7dfdc;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.05;
+      }
+
+      .meta {
+        display: grid;
+        gap: 6px;
+        color: #6d6257;
+        line-height: 1.5;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        margin: 18px 0;
+      }
+
+      input,
+      button {
+        min-height: 42px;
+        border: 1px solid #cbd8d4;
+        border-radius: 8px;
+        background: #fff;
+        color: #20201f;
+        font: inherit;
+      }
+
+      input {
+        width: 100%;
+        padding: 0 12px;
+      }
+
+      button {
+        padding: 0 16px;
+        cursor: pointer;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 14px;
+      }
+
+      article {
+        display: grid;
+        gap: 8px;
+        padding: 16px;
+        border: 1px solid #d7dfdc;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      article.assistant {
+        border-color: #b7d8d1;
+        background: #f8fbfa;
+      }
+
+      .role {
+        color: #e2573f;
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      article.assistant .role {
+        color: #0f766e;
+      }
+
+      .timestamp {
+        color: #7a736c;
+        font-size: 0.82rem;
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.55;
+        font-family: inherit;
+      }
+
+      .empty {
+        padding: 24px;
+        color: #6d6257;
+        text-align: center;
+      }
+
+      @media (max-width: 700px) {
+        .toolbar {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Spicy-to-Nice Codex Build Conversation</h1>
+        <div class="meta" id="meta">Loading conversation...</div>
+      </header>
+      <section class="toolbar" aria-label="Conversation controls">
+        <input id="search" type="search" placeholder="Search conversation" />
+        <button id="toggle-assistant" type="button">Hide assistant</button>
+      </section>
+      <section class="timeline" id="timeline" aria-live="polite"></section>
+    </main>
+    <script>
+      const state = {
+        messages: [],
+        query: "",
+        showAssistant: true,
+      };
+
+      const meta = document.querySelector("#meta");
+      const timeline = document.querySelector("#timeline");
+      const search = document.querySelector("#search");
+      const toggleAssistant = document.querySelector("#toggle-assistant");
+
+      fetch("./conversation.json")
+        .then((response) => response.json())
+        .then((data) => {
+          state.messages = data.messages || [];
+          meta.innerHTML = [
+            "<span>" + escapeHtml(data.note || "") + "</span>",
+            "<span>" + escapeHtml(String(data.stats?.messageCount || 0)) + " visible messages exported from " + escapeHtml(data.source || "Codex") + ".</span>",
+            "<span>Exported at " + escapeHtml(new Date(data.exportedAt).toLocaleString()) + ".</span>",
+          ].join("");
+          render();
+        })
+        .catch((error) => {
+          meta.textContent = "Could not load conversation.json.";
+          timeline.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        });
+
+      search.addEventListener("input", (event) => {
+        state.query = event.target.value.toLowerCase();
+        render();
+      });
+
+      toggleAssistant.addEventListener("click", () => {
+        state.showAssistant = !state.showAssistant;
+        toggleAssistant.textContent = state.showAssistant ? "Hide assistant" : "Show assistant";
+        render();
+      });
+
+      function render() {
+        const messages = state.messages.filter((message) => {
+          if (!state.showAssistant && message.role === "assistant") {
+            return false;
+          }
+
+          if (!state.query) {
+            return true;
+          }
+
+          return message.text.toLowerCase().includes(state.query);
+        });
+
+        if (messages.length === 0) {
+          timeline.innerHTML = '<div class="empty">No messages match the current filters.</div>';
+          return;
+        }
+
+        timeline.innerHTML = messages.map((message) => {
+          const when = message.timestamp ? new Date(message.timestamp).toLocaleString() : "";
+          return '<article class="' + escapeHtml(message.role) + '">' +
+            '<div class="role">' + escapeHtml(message.role) + '</div>' +
+            '<div class="timestamp">' + escapeHtml(when) + '</div>' +
+            '<pre>' + escapeHtml(message.text) + '</pre>' +
+          '</article>';
+        }).join("");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>

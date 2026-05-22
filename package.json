@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "export:conversation": "node scripts/export-codex-conversation.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
