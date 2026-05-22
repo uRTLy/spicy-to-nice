@@ -93,10 +93,11 @@ export function ConversationPage({ onBack }: ConversationPageProps) {
           Back to app
         </button>
         <div>
-          <p className="eyebrow">Build transcript</p>
-          <h1>Codex conversation</h1>
+          <p className="eyebrow">Project notes</p>
+          <h1>Prototype collaboration log</h1>
           <p>
-            A sanitized, bundled transcript of the collaboration behind this prototype.
+            A reviewer-friendly record of the planning, tradeoffs, and build decisions behind
+            this prototype.
           </p>
         </div>
       </header>

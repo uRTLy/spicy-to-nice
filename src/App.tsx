@@ -73,9 +73,6 @@ type AppAction =
   | { type: "copy_reset" };
 
 const initialOutputText = "Your polished feedback will appear here.";
-const conversationSourcePath =
-  "~/.codex/sessions/2026/05/18/rollout-2026-05-18T15-14-20-019e3b39-220f-7882-a4a8-dbb908a0ce24.jsonl";
-
 const initialState: AppState = {
   mode: "single",
   audience: "manager",
@@ -571,37 +568,31 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
           </button>
         </div>
 
-        <section className="transcript-card" aria-label="Build transcript">
+        <section className="transcript-card" aria-label="Project notes">
           <div>
-            <p className="eyebrow">Build transcript</p>
-            <h2>See the Codex conversation behind this app</h2>
+            <p className="eyebrow">Project notes</p>
+            <h2>How this prototype came together</h2>
             <p>
-              A sanitized viewer is bundled with the app. It keeps visible user and
-              assistant messages, while omitting tool output, hidden context, and secrets.
+              Review the sanitized planning and build conversation for product decisions,
+              tradeoffs, and implementation checkpoints.
             </p>
           </div>
           <dl>
             <div>
-              <dt>Viewer</dt>
+              <dt>Includes</dt>
               <dd>
-                <code>/conversation</code>
+                Planning notes and visible collaboration
               </dd>
             </div>
             <div>
-              <dt>Repo file</dt>
+              <dt>Privacy</dt>
               <dd>
-                <code>src/ConversationPage.tsx</code>
-              </dd>
-            </div>
-            <div>
-              <dt>Sanitized from</dt>
-              <dd>
-                <code>{conversationSourcePath}</code>
+                Tool output, hidden context, and secrets omitted
               </dd>
             </div>
           </dl>
           <button className="transcript-button" type="button" onClick={onOpenConversation}>
-            Open transcript
+            Open notes
           </button>
         </section>
 

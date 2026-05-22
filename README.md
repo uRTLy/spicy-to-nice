@@ -70,11 +70,11 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Generation returns balanced, direct, and concise variants for the user to choose from.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
 - Offline generation is wired through WebLLM/WebGPU with a worker-backed local adapter and typed model catalog.
-- A sanitized Codex build transcript is available at `/conversation` inside the running app.
+- Sanitized project notes are available at `/conversation` inside the running app.
 
 ## Conversation Export
 
-This repo includes a sanitized transcript export for the in-app Codex conversation page.
+This repo includes a sanitized transcript export for the in-app project notes page.
 
 ```bash
 npm run export:conversation
