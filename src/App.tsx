@@ -207,12 +207,20 @@ function getGenerationBlocker(state: AppState) {
   return "";
 }
 
+function resizeComposerInput(element: HTMLTextAreaElement) {
+  element.style.height = "auto";
+  element.style.height = `${Math.min(element.scrollHeight, 150)}px`;
+}
+
 export function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const generationBlocker = getGenerationBlocker(state);
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
+  const canSendDraft = state.mode === "ranting" ? canAddSegment : canGenerate;
+  const sendButtonLabel =
+    state.mode === "ranting" ? "Capture thought" : "Generate polished feedback";
 
   function addSegment() {
     const text = state.draft.trim();
@@ -222,7 +230,12 @@ export function App() {
     }
 
     dispatch({ type: "add_segment", segment: makeSegment(text) });
-    requestAnimationFrame(() => textareaRef.current?.focus());
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.focus();
+      }
+    });
   }
 
   async function generate() {
@@ -348,64 +361,87 @@ export function App() {
 
         <section className="grid">
           <div className={`input-panel ${state.mode === "ranting" ? "ranting-panel" : ""}`}>
-            <label className="field-label" htmlFor="raw-feedback">
-              {state.mode === "ranting" ? "Rant segment" : "Raw feedback"}
-            </label>
-            <textarea
-              id="raw-feedback"
-              ref={textareaRef}
-              value={state.draft}
-              disabled={state.output.status === "loading"}
-              onChange={(event) =>
-                dispatch({ type: "set_draft", draft: event.target.value })
-              }
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  submitDraft();
-                }
-              }}
-              placeholder={
-                state.mode === "ranting"
-                  ? "Write one thought, press Enter, then keep going..."
-                  : "Paste the spicy version here..."
-              }
-            />
+            <div className="input-heading">
+              <span className="field-label">
+                {state.mode === "ranting" ? "Rant stream" : "Raw feedback"}
+              </span>
+              {state.mode === "ranting" ? <span>{state.segments.length} saved</span> : null}
+            </div>
 
-            {state.mode === "ranting" ? (
-              <div className="rant-actions">
-                <button type="button" onClick={addSegment} disabled={!canAddSegment}>
-                  Add segment
+            <div className="message-surface">
+              {state.mode === "ranting" ? (
+                state.segments.length > 0 ? (
+                  <ol className="segment-list" aria-label="Saved rant segments">
+                    {state.segments.map((segment, index) => (
+                      <li key={segment.id}>
+                        <span>{index + 1}</span>
+                        <p>{segment.text}</p>
+                        <button
+                          type="button"
+                          aria-label={`Remove thought ${index + 1}`}
+                          disabled={state.output.status === "loading"}
+                          onClick={() => dispatch({ type: "remove_segment", id: segment.id })}
+                        >
+                          x
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="empty-rant">
+                    Start typing like a message thread. Enter captures each thought.
+                  </div>
+                )
+              ) : state.draft.trim() ? null : (
+                <div className="standard-empty">
+                  Drop the spicy version here, then send it for polish.
+                </div>
+              )}
+
+              <div className="composer" data-mode={state.mode}>
+                <label className="sr-only" htmlFor="raw-feedback">
+                  {state.mode === "ranting" ? "Rant segment" : "Raw feedback"}
+                </label>
+                <textarea
+                  id="raw-feedback"
+                  ref={textareaRef}
+                  rows={1}
+                  value={state.draft}
+                  disabled={state.output.status === "loading"}
+                  onChange={(event) => {
+                    resizeComposerInput(event.currentTarget);
+                    dispatch({ type: "set_draft", draft: event.target.value });
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      submitDraft();
+                    }
+                  }}
+                  placeholder={
+                    state.mode === "ranting"
+                      ? "Rant here. Enter sends this thought..."
+                      : "Paste the spicy version here..."
+                  }
+                />
+                <button
+                  type="button"
+                  aria-label={sendButtonLabel}
+                  title={sendButtonLabel}
+                  disabled={!canSendDraft}
+                  onClick={submitDraft}
+                >
+                  ↑
                 </button>
-                <span>{state.segments.length} saved</span>
               </div>
-            ) : null}
-
-            {state.mode === "ranting" && state.segments.length > 0 ? (
-              <ol className="segment-list" aria-label="Saved rant segments">
-                {state.segments.map((segment, index) => (
-                  <li key={segment.id}>
-                    <span>{index + 1}</span>
-                    <p>{segment.text}</p>
-                    <button
-                      type="button"
-                      disabled={state.output.status === "loading"}
-                      onClick={() => dispatch({ type: "remove_segment", id: segment.id })}
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            ) : state.mode === "ranting" ? (
-              <div className="empty-rant">
-                Each Enter captures a thought here. Generate when the whole rant is out.
-              </div>
-            ) : null}
+              <p className="composer-hint">
+                Enter to send. Shift+Enter for a new line.
+              </p>
+            </div>
           </div>
 
           <aside className="settings-panel" aria-label="Output settings">

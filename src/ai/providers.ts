@@ -129,7 +129,18 @@ function readProviderError(payload: unknown, providerName: string) {
     "message" in payload.error &&
     typeof payload.error.message === "string"
   ) {
-    return `${providerName} rejected the request: ${payload.error.message}`;
+    const message = payload.error.message;
+    const lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.includes("quota") || lowerMessage.includes("billing")) {
+      return `${providerName} says this key has no remaining quota or billing is not enabled. Try a key from a project with API credits, or lower the project budget after testing.`;
+    }
+
+    if (lowerMessage.includes("invalid api key") || lowerMessage.includes("incorrect api key")) {
+      return `${providerName} says this API key is invalid. Check that the key was copied fully and belongs to the selected project.`;
+    }
+
+    return `${providerName} rejected the request: ${message.replace(/https?:\/\/\S+/g, "").trim()}`;
   }
 
   return `${providerName} rejected the request. Check the key and try again.`;
