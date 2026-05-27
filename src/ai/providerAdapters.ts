@@ -7,7 +7,6 @@ import { defaultReasoningEffortId } from "../config/feedbackConfig";
 import { FeedbackGenerationError } from "./errors";
 import { parseFeedbackResponseText } from "./feedbackResponse";
 import { buildFeedbackPrompt, feedbackResponseSchema } from "./prompt";
-import { generateWithWebLLM } from "./webllmAdapter";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
@@ -87,7 +86,11 @@ export const openAIAdapter: FeedbackProviderAdapter = {
 
 export const localWebLLMAdapter: FeedbackProviderAdapter = {
   provider: "local",
-  generate: generateWithWebLLM,
+  async generate(input) {
+    const { generateWithWebLLM } = await import("./webllmAdapter");
+
+    return generateWithWebLLM(input);
+  },
 };
 
 export function unavailableAdapter(providerName: string, provider: Provider): FeedbackProviderAdapter {
