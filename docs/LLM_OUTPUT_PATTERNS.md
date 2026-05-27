@@ -28,6 +28,9 @@ This app should treat model output as product data, not as unstructured prose.
 7. Provider-specific fallback.
    Use strict structured outputs for OpenAI and Gemini when available. For local WebLLM, request JSON and parse defensively because small local models may not follow schemas perfectly.
 
+8. Model-size-aware prompting.
+   Tiny local models should get one plain-text rewrite task instead of schema-shaped multi-variant output. Larger local models and hosted models can handle stricter structure.
+
 ## Why This Matches Common LLM Product Practice
 
 - OpenAI recommends Structured Outputs when the model response needs to fit a specific schema for the application UI.

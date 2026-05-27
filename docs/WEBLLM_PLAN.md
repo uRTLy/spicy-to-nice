@@ -13,7 +13,9 @@ Offline mode should be explicit:
 - Show it as a provider option named `Offline`.
 - Do not silently fall back to Offline when OpenAI fails.
 - If hosted generation fails and WebGPU exists, offer a clear "Try Offline" path later.
-- Explain that the first run downloads a model and can take time.
+- Keep local model downloads in the top provider bar with clear `Download`, `Downloaded`, progress, and error states.
+- Keep the Generate-adjacent model picker focused on selecting hosted models or already downloaded local models.
+- Explain that the first run downloads a model into browser-managed cache and can take time.
 - Explain that user text stays local during offline generation.
 
 ## Provider Shape
@@ -44,6 +46,7 @@ Validation changes:
 The codebase now has the first abstraction layer in place:
 
 - `src/ai/localModels.json`: extendable model catalog with URLs, download estimates, VRAM estimates, and model metadata.
+- `src/ai/hostedModels.json`: extendable hosted-model catalog for OpenAI models shown in the same model picker.
 - `src/ai/localModelCatalog.ts`: typed helpers for reading the catalog and building WebLLM app config records.
 - `src/ai/llmDownloader.ts`: local-model download/support/progress planning layer.
 - `src/ai/providerAdapters.ts`: hosted/local provider adapter seam.
@@ -56,7 +59,9 @@ The app now has a first working Offline provider path:
 - `src/ai/webllm.worker.ts` hosts WebLLM in a module worker.
 - `src/ai/webllmAdapter.ts` dynamically imports WebLLM, initializes the selected model, and calls the same prompt builder used by OpenAI.
 - `src/ai/llmDownloader.ts` emits support, download, load, ready, and error progress for the React UI.
-- The provider selector no longer marks Offline as "soon"; the first real generation attempt downloads the selected model.
+- The provider selector includes Offline as an implemented option; the UI now requires a model to be downloaded before it can be selected for Offline generation.
+- `src/ModelSelector.tsx` presents hosted and local models together for selection; local download actions and progress live in the top provider bar.
+- Tiny local models use a simpler plain-text rewrite prompt and return one balanced draft, because they are not reliable enough for strict JSON and three variants.
 
 ## Implementation Steps
 
@@ -89,8 +94,8 @@ The app now has a first working Offline provider path:
 - Checking browser support
 - Downloading model
 - Loading model
-- Generating locally
-- Model cached
+- Downloaded in browser cache
+- Selected for Offline generation
 - Offline unavailable
 
 ## Model Candidates
@@ -137,7 +142,8 @@ Phase 2:
 
 Phase 3:
 
-- Add a small model selector.
+- Done: add a compact active-model selector beside Generate, with hosted models and downloaded local selection, while downloads stay in the top provider bar.
+- Done: adapt local generation by model size: tiny models get a simpler single-draft task, while larger local models keep the structured variant task.
 - Add quality guidance: "Fastest" vs "Better rewrite."
 - Add a manual "Try Offline" recovery button for quota or billing errors from hosted providers.
 

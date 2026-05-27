@@ -48,6 +48,9 @@ docs/
   WEBLLM_PLAN.md
 src/
   App.tsx
+  config/
+    feedbackConfig.json
+    feedbackConfig.ts
   main.tsx
 ```
 
@@ -70,7 +73,11 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Generation returns balanced, direct, and concise variants for the user to choose from.
 - Very short input asks for confirmation before generating, so terse tests still work when intentional.
 - Offline generation is wired through WebLLM/WebGPU with a worker-backed local adapter and typed model catalog.
-- Offline mode includes a model setup panel with download size, GPU memory, privacy notes, and a manual Load model action.
+- Local model downloads live in the top provider bar, with status labels and progress shown there.
+- The model picker sits next to Generate and stays focused on selection: hosted models plus downloaded local models.
+- Tiny local models use a simpler one-draft prompt; larger local or hosted models can return multiple variants.
+- Audience, tone, reasoning options, and default rewrite preferences are loaded from `src/config/feedbackConfig.json`.
+- Hosted model options live in `src/ai/hostedModels.json`; browser-local model options live in `src/ai/localModels.json`.
 - Sanitized project notes are available at `/conversation` inside the running app.
 
 ## Conversation Export

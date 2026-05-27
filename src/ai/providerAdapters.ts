@@ -3,13 +3,14 @@ import type {
   GenerateFeedbackOutput,
   Provider,
 } from "../feedbackTypes";
+import { defaultReasoningEffortId } from "../config/feedbackConfig";
 import { FeedbackGenerationError } from "./errors";
 import { parseFeedbackResponseText } from "./feedbackResponse";
 import { buildFeedbackPrompt, feedbackResponseSchema } from "./prompt";
 import { generateWithWebLLM } from "./webllmAdapter";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const OPENAI_MODEL = "gpt-5-mini";
+const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 
 export type NormalizedGenerateFeedbackInput = GenerateFeedbackInput & {
   segments: string[];
@@ -28,6 +29,26 @@ export const openAIAdapter: FeedbackProviderAdapter = {
     }
 
     const prompt = buildFeedbackPrompt(input);
+    const reasoningEffort = input.reasoningEffort ?? defaultReasoningEffortId;
+    const requestBody: Record<string, unknown> = {
+      model: input.modelId ?? DEFAULT_OPENAI_MODEL,
+      instructions: prompt.instructions,
+      input: prompt.input,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "feedback_rewrite_variants",
+          strict: true,
+          schema: feedbackResponseSchema,
+        },
+      },
+    };
+
+    if (reasoningEffort !== "none") {
+      requestBody.reasoning = {
+        effort: reasoningEffort,
+      };
+    }
 
     let response: Response;
 
@@ -38,19 +59,7 @@ export const openAIAdapter: FeedbackProviderAdapter = {
           Authorization: `Bearer ${input.apiKey.trim()}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          instructions: prompt.instructions,
-          input: prompt.input,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "feedback_rewrite_variants",
-              strict: true,
-              schema: feedbackResponseSchema,
-            },
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
     } catch {
       throw new FeedbackGenerationError(

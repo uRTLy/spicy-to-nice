@@ -1,0 +1,72 @@
+{
+  "defaultAudienceId": "manager",
+  "defaultToneId": "diplomatic",
+  "defaultReasoningEffortId": "low",
+  "defaultSystemPrompt": "Preserve the useful feedback, remove insults and excess heat, avoid inventing facts, and keep the result actionable and sendable.",
+  "audiences": [
+    {
+      "id": "manager",
+      "label": "Manager",
+      "prompt": "The recipient is the user's manager. Keep it respectful, concise, and framed around impact, blockers, and requested support."
+    },
+    {
+      "id": "direct_report",
+      "label": "Direct report",
+      "prompt": "The recipient is the user's direct report. Keep it clear, fair, specific, and oriented toward coaching and expectations."
+    },
+    {
+      "id": "peer",
+      "label": "Peer",
+      "prompt": "The recipient is the user's peer. Keep it collaborative, direct, and focused on shared outcomes."
+    },
+    {
+      "id": "customer",
+      "label": "Customer",
+      "prompt": "The recipient is a customer. Keep it professional, service-minded, calm, and careful with accountability."
+    }
+  ],
+  "tones": [
+    {
+      "id": "diplomatic",
+      "label": "Diplomatic",
+      "prompt": "Use a diplomatic tone: tactful, balanced, and respectful without dodging the core issue."
+    },
+    {
+      "id": "warm",
+      "label": "Warm",
+      "prompt": "Use a warm tone: human, generous, and encouraging while still being specific."
+    },
+    {
+      "id": "firm",
+      "label": "Firm",
+      "prompt": "Use a firm tone: direct, boundaried, and clear without sounding hostile."
+    },
+    {
+      "id": "concise",
+      "label": "Concise",
+      "prompt": "Use a concise tone: short, specific, and free of unnecessary framing."
+    }
+  ],
+  "reasoningEfforts": [
+    {
+      "id": "none",
+      "label": "None",
+      "description": "Lowest latency. Best when the task is already straightforward."
+    },
+    {
+      "id": "low",
+      "label": "Low",
+      "description": "Default. A light reasoning pass for rewrite quality without much delay."
+    },
+    {
+      "id": "medium",
+      "label": "Medium",
+      "description": "More deliberation for messy, multi-part feedback."
+    },
+    {
+      "id": "high",
+      "label": "High",
+      "description": "Most deliberate hosted rewrite option. Slower and usually unnecessary for quick drafts."
+    }
+  ]
+}

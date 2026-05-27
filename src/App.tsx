@@ -1,5 +1,11 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { ConversationPage } from "./ConversationPage";
+import { ModelSelector, type ModelSelectorOption } from "./ModelSelector";
+import {
+  defaultHostedModelId,
+  getHostedModel,
+  getHostedModels,
+} from "./ai/hostedModelCatalog";
 import { llmDownloader, type LLMDownloadProgress } from "./ai/llmDownloader";
 import {
   defaultLocalModelId,
@@ -9,21 +15,23 @@ import {
 } from "./ai/localModelCatalog";
 import { FeedbackGenerationError, generateFeedback, providerConfigs } from "./ai/providers";
 import { preloadWebLLMModel } from "./ai/webllmAdapter";
-import type { Audience, FeedbackMode, FeedbackVariant, Provider, Tone } from "./feedbackTypes";
-
-const audiences: Array<{ label: string; value: Audience }> = [
-  { label: "Manager", value: "manager" },
-  { label: "Direct report", value: "direct_report" },
-  { label: "Peer", value: "peer" },
-  { label: "Customer", value: "customer" },
-];
-
-const tones: Array<{ label: string; value: Tone }> = [
-  { label: "Diplomatic", value: "diplomatic" },
-  { label: "Warm", value: "warm" },
-  { label: "Firm", value: "firm" },
-  { label: "Concise", value: "concise" },
-];
+import {
+  audienceOptions,
+  defaultAudienceId,
+  defaultEditableSystemPrompt,
+  defaultReasoningEffortId,
+  defaultToneId,
+  reasoningOptions,
+  toneOptions,
+} from "./config/feedbackConfig";
+import type {
+  Audience,
+  FeedbackMode,
+  FeedbackVariant,
+  Provider,
+  ReasoningEffort,
+  Tone,
+} from "./feedbackTypes";
 
 type Segment = {
   id: string;
@@ -36,12 +44,32 @@ type OutputState =
   | { status: "success"; text: string }
   | { status: "error"; text: string; message: string };
 
+type LocalModelAvailabilityStage =
+  | "checking"
+  | "not-downloaded"
+  | "preparing"
+  | "downloading"
+  | "loading"
+  | "downloaded"
+  | "ready"
+  | "unavailable"
+  | "error";
+
+type LocalModelAvailability = {
+  stage: LocalModelAvailabilityStage;
+  message: string;
+  progress?: number;
+};
+
 type AppState = {
   mode: FeedbackMode;
   audience: Audience;
   tone: Tone;
   provider: Provider;
+  hostedModelId: string;
   localModelId: string;
+  reasoningEffort: ReasoningEffort;
+  systemPrompt: string;
   apiKey: string;
   draft: string;
   segments: Segment[];
@@ -59,7 +87,11 @@ type AppAction =
   | { type: "set_audience"; audience: Audience }
   | { type: "set_tone"; tone: Tone }
   | { type: "set_provider"; provider: Provider }
+  | { type: "set_hosted_model"; hostedModelId: string }
   | { type: "set_local_model"; localModelId: string }
+  | { type: "set_reasoning_effort"; reasoningEffort: ReasoningEffort }
+  | { type: "set_system_prompt"; systemPrompt: string }
+  | { type: "reset_system_prompt" }
   | { type: "set_api_key"; apiKey: string }
   | { type: "set_draft"; draft: string }
   | { type: "add_segment"; segment: Segment }
@@ -76,10 +108,13 @@ type AppAction =
 const initialOutputText = "Your polished feedback will appear here.";
 const initialState: AppState = {
   mode: "single",
-  audience: "manager",
-  tone: "diplomatic",
+  audience: defaultAudienceId,
+  tone: defaultToneId,
   provider: "openai",
+  hostedModelId: defaultHostedModelId,
   localModelId: defaultLocalModelId,
+  reasoningEffort: defaultReasoningEffortId,
+  systemPrompt: defaultEditableSystemPrompt,
   apiKey: "",
   draft: "",
   segments: [],
@@ -114,7 +149,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       case "set_audience":
       case "set_tone":
       case "set_provider":
+      case "set_hosted_model":
       case "set_local_model":
+      case "set_reasoning_effort":
+      case "set_system_prompt":
+      case "reset_system_prompt":
       case "set_api_key":
       case "set_draft":
       case "add_segment":
@@ -181,11 +220,36 @@ function reducer(state: AppState, action: AppAction): AppState {
         shortInputConfirmationPending: false,
         output: clearError(state.output),
       };
+    case "set_hosted_model":
+      return {
+        ...state,
+        hostedModelId: action.hostedModelId,
+        shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
     case "set_local_model":
       return {
         ...state,
         localModelId: action.localModelId,
         shortInputConfirmationPending: false,
+        output: clearError(state.output),
+      };
+    case "set_reasoning_effort":
+      return {
+        ...state,
+        reasoningEffort: action.reasoningEffort,
+        output: clearError(state.output),
+      };
+    case "set_system_prompt":
+      return {
+        ...state,
+        systemPrompt: action.systemPrompt,
+        output: clearError(state.output),
+      };
+    case "reset_system_prompt":
+      return {
+        ...state,
+        systemPrompt: defaultEditableSystemPrompt,
         output: clearError(state.output),
       };
     case "set_api_key":
@@ -285,13 +349,301 @@ function getDisplayedOutputText(state: AppState) {
   return getSelectedVariant(state)?.text ?? state.output.text;
 }
 
-function isLocalProgressBusy(progress: LLMDownloadProgress | null) {
+function canUseLocalModel(status: LocalModelAvailability | undefined) {
+  return status?.stage === "downloaded" || status?.stage === "ready";
+}
+
+function isLocalStatusBusy(status: LocalModelAvailability | undefined) {
   return (
-    progress?.stage === "checking-support" ||
-    progress?.stage === "ready-to-download" ||
-    progress?.stage === "downloading" ||
-    progress?.stage === "loading"
+    status?.stage === "checking" ||
+    status?.stage === "preparing" ||
+    status?.stage === "downloading" ||
+    status?.stage === "loading"
   );
+}
+
+function mapDownloadProgressToAvailability(
+  progress: LLMDownloadProgress,
+): LocalModelAvailability {
+  switch (progress.stage) {
+    case "checking-support":
+      return {
+        stage: "checking",
+        message: progress.message,
+        progress: progress.progress,
+      };
+    case "ready-to-download":
+      return {
+        stage: "preparing",
+        message: progress.message,
+        progress: progress.progress,
+      };
+    case "downloading":
+    case "loading":
+    case "ready":
+    case "unavailable":
+    case "error":
+      return {
+        stage: progress.stage,
+        message: progress.message,
+        progress: progress.progress,
+      };
+    case "idle":
+    default:
+      return {
+        stage: "not-downloaded",
+        message: "Not downloaded in this browser yet.",
+      };
+  }
+}
+
+function getLocalGenerationBlocker(
+  state: AppState,
+  status: LocalModelAvailability | undefined,
+) {
+  if (state.provider !== "local") {
+    return "";
+  }
+
+  if (!status) {
+    return "Download a local model in the top bar, then select it from the model picker before generating offline.";
+  }
+
+  if (isLocalStatusBusy(status)) {
+    return "Finish downloading or preparing the selected local model before generating.";
+  }
+
+  if (!canUseLocalModel(status)) {
+    return "Download a local model in the top bar, then select it from the model picker before generating offline.";
+  }
+
+  return "";
+}
+
+function getProviderDescription(provider: Provider) {
+  switch (provider) {
+    case "openai":
+      return "Hosted BYOK";
+    case "local":
+      return "Browser local";
+    case "gemini":
+      return "Provider key";
+    case "anthropic":
+      return "Provider key";
+    default:
+      return "";
+  }
+}
+
+function getLocalModelControlLabel(
+  modelLabel: string,
+  status: LocalModelAvailability | undefined,
+) {
+  if (status?.stage === "ready") {
+    return `${modelLabel} ready`;
+  }
+
+  if (status?.stage === "downloaded") {
+    return modelLabel;
+  }
+
+  return modelLabel;
+}
+
+function getLocalModelControlHint(status: LocalModelAvailability | undefined) {
+  if (status?.stage === "ready") {
+    return "Ready in this tab";
+  }
+
+  if (status?.stage === "downloaded") {
+    return "Downloaded";
+  }
+
+  if (status?.stage === "downloading" && typeof status.progress === "number") {
+    return `${Math.round(status.progress * 100)}%`;
+  }
+
+  if (status?.stage === "unavailable") {
+    return "WebGPU needed";
+  }
+
+  return "Download from Local models above";
+}
+
+function getLocalModelPhaseLabel(status: LocalModelAvailability | undefined) {
+  if (!status) {
+    return "Ready to download";
+  }
+
+  switch (status.stage) {
+    case "checking":
+      return "Checking model";
+    case "preparing":
+      return "Preparing download";
+    case "downloading":
+      return typeof status.progress === "number"
+        ? `Downloading ${Math.round(status.progress * 100)}%`
+        : "Downloading model";
+    case "loading":
+      return "Preparing model";
+    case "downloaded":
+      return "Downloaded";
+    case "ready":
+      return "Ready";
+    case "unavailable":
+      return "Unavailable";
+    case "error":
+      return "Needs retry";
+    case "not-downloaded":
+    default:
+      return "Ready to download";
+  }
+}
+
+function getLocalModelProgress(status: LocalModelAvailability | undefined) {
+  if (!status || !isLocalStatusBusy(status)) {
+    return undefined;
+  }
+
+  if (typeof status.progress === "number") {
+    return status.progress;
+  }
+
+  switch (status.stage) {
+    case "checking":
+      return 0.04;
+    case "preparing":
+      return 0.08;
+    case "loading":
+      return 0.92;
+    default:
+      return undefined;
+  }
+}
+
+function getLocalModelProgressHint(status: LocalModelAvailability) {
+  const percent =
+    typeof status.progress === "number" ? `${Math.round(status.progress * 100)}% - ` : "";
+
+  return `${percent}${status.message}`;
+}
+
+function getModelPickerLocalStatus(status: LocalModelAvailability | undefined) {
+  if (canUseLocalModel(status)) {
+    return "Offline";
+  }
+
+  if (status?.stage === "unavailable") {
+    return "Unavailable";
+  }
+
+  if (status?.stage === "error") {
+    return "Retry above";
+  }
+
+  if (status && isLocalStatusBusy(status)) {
+    return "Downloading above";
+  }
+
+  return "Needs download";
+}
+
+function getLocalDownloadButtonLabel(status: LocalModelAvailability | undefined) {
+  if (status?.stage === "ready" || status?.stage === "downloaded") {
+    return "Downloaded";
+  }
+
+  if (status?.stage === "checking") {
+    return "Checking";
+  }
+
+  if (status?.stage === "preparing") {
+    return "Preparing";
+  }
+
+  if (status?.stage === "downloading") {
+    return "Downloading...";
+  }
+
+  if (status?.stage === "loading") {
+    return "Loading...";
+  }
+
+  if (status?.stage === "unavailable") {
+    return "Unavailable";
+  }
+
+  if (status?.stage === "error") {
+    return "Retry";
+  }
+
+  return "Download";
+}
+
+function canDownloadLocalModel(
+  status: LocalModelAvailability | undefined,
+  activeLocalModelId: string | null,
+  modelId: string,
+  isGenerating: boolean,
+) {
+  if (isGenerating || (activeLocalModelId !== null && activeLocalModelId !== modelId)) {
+    return false;
+  }
+
+  return (
+    !status ||
+    status.stage === "not-downloaded" ||
+    status.stage === "error"
+  );
+}
+
+function getTopbarLocalStatus(
+  modelLabel: string,
+  status: LocalModelAvailability | undefined,
+) {
+  if (!status) {
+    return `${modelLabel} is not downloaded in this browser yet.`;
+  }
+
+  if (isLocalStatusBusy(status)) {
+    return getLocalModelProgressHint(status);
+  }
+
+  return status.message;
+}
+
+function buildModelOptions(
+  statuses: Record<string, LocalModelAvailability>,
+  hasOpenAIKey: boolean,
+): ModelSelectorOption[] {
+  const hostedOptions = getHostedModels("openai").map((model) => ({
+    id: model.id,
+    label: model.label,
+    description: hasOpenAIKey
+      ? model.description
+      : "Enter an OpenAI API key above to use hosted BYOK models.",
+    status: hasOpenAIKey ? "OpenAI" : "Needs API key",
+    disabled: !hasOpenAIKey,
+    default: model.default,
+  }));
+
+  const localOptions = supportedLocalModels.map((model) => {
+    const status = statuses[model.id];
+    const isUsable = canUseLocalModel(status);
+
+    return {
+      id: model.id,
+      label: model.label,
+      description: isUsable
+        ? `${model.estimatedDownloadMB} MB browser-local model`
+        : `${model.estimatedDownloadMB} MB, download in Local models above`,
+      status: isUsable ? getModelPickerLocalStatus(status) : "",
+      disabled: !isUsable,
+      default: model.id === defaultLocalModelId,
+    };
+  });
+
+  return [...hostedOptions, ...localOptions];
 }
 
 function getGenerationBlocker(state: AppState) {
@@ -369,19 +721,51 @@ type TranslatorAppProps = {
 
 function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [localProgress, setLocalProgress] = useState<LLMDownloadProgress | null>(null);
-  const [isLocalModelLoading, setIsLocalModelLoading] = useState(false);
+  const [localModelStatuses, setLocalModelStatuses] = useState<
+    Record<string, LocalModelAvailability>
+  >({});
+  const [activeLocalModelId, setActiveLocalModelId] = useState<string | null>(null);
+  const [localDownloadModelId, setLocalDownloadModelId] = useState(defaultLocalModelId);
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedProvider = providerConfigs.find((item) => item.provider === state.provider);
+  const selectedHostedModel =
+    getHostedModel(state.hostedModelId) ?? getHostedModel(defaultHostedModelId);
   const selectedLocalModel = getLocalModel(state.localModelId) ?? getDefaultLocalModel();
-  const generationBlocker = getGenerationBlocker(state);
+  const selectedLocalStatus = localModelStatuses[selectedLocalModel.id];
+  const localDownloadModel = getLocalModel(localDownloadModelId) ?? getDefaultLocalModel();
+  const localDownloadStatus = localModelStatuses[localDownloadModel.id];
+  const localDownloadProgress = getLocalModelProgress(localDownloadStatus);
+  const visibleProviderConfigs = providerConfigs.filter((item) => item.implemented);
+  const generationBlocker =
+    getGenerationBlocker(state) || getLocalGenerationBlocker(state, selectedLocalStatus);
   const selectedVariant = getSelectedVariant(state);
   const displayedOutputText = getDisplayedOutputText(state);
-  const selectedLocalProgress =
-    localProgress?.modelId === selectedLocalModel.id ? localProgress : null;
-  const isSelectedLocalModelReady = selectedLocalProgress?.stage === "ready";
-  const isSelectedLocalModelBusy =
-    isLocalModelLoading || isLocalProgressBusy(selectedLocalProgress);
+  const localModelControlLabel = getLocalModelControlLabel(
+    selectedLocalModel.label,
+    selectedLocalStatus,
+  );
+  const localModelControlHint = getLocalModelControlHint(selectedLocalStatus);
+  const activeModelLabel =
+    state.provider === "local"
+      ? localModelControlLabel
+      : (selectedHostedModel?.label ?? state.hostedModelId);
+  const activeModelHint =
+    state.provider === "local"
+      ? localModelControlHint
+      : (selectedHostedModel?.description ?? "Hosted model");
+  const modelSelectorOptions = buildModelOptions(
+    localModelStatuses,
+    state.apiKey.trim().length > 0,
+  );
+  const selectedModelId = state.provider === "local" ? state.localModelId : state.hostedModelId;
+  const canDownloadSelectedLocalModel = canDownloadLocalModel(
+    localDownloadStatus,
+    activeLocalModelId,
+    localDownloadModel.id,
+    state.output.status === "loading",
+  );
   const canAddSegment = state.draft.trim().length > 0 && state.output.status !== "loading";
   const canGenerate = !generationBlocker;
   const canSendDraft = state.mode === "ranting" ? canAddSegment : canGenerate;
@@ -390,11 +774,37 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
   const canCopy = state.output.status === "success" && displayedOutputText.trim().length > 0;
 
   useEffect(() => {
-    const unsubscribe = llmDownloader.subscribe(setLocalProgress);
+    const unsubscribe = llmDownloader.subscribe((progress) => {
+      if (!progress.modelId) {
+        return;
+      }
+
+      setLocalModelStatuses((current) => ({
+        ...current,
+        [progress.modelId as string]: mapDownloadProgressToAvailability(progress),
+      }));
+    });
+
     return () => {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isModelSelectorOpen && !isSettingsOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsModelSelectorOpen(false);
+        setIsSettingsOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isModelSelectorOpen, isSettingsOpen]);
 
   function addSegment() {
     const text = state.draft.trim();
@@ -440,6 +850,9 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
         provider: state.provider,
         apiKey: state.apiKey,
         localModelId: state.localModelId,
+        modelId: state.hostedModelId,
+        reasoningEffort: state.reasoningEffort,
+        systemPrompt: state.systemPrompt,
       });
 
       dispatch({
@@ -459,20 +872,45 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
     }
   }
 
-  async function loadLocalModelNow() {
-    if (isSelectedLocalModelBusy || isSelectedLocalModelReady) {
+  async function downloadLocalModel(modelId: string) {
+    const status = localModelStatuses[modelId];
+
+    if (
+      activeLocalModelId ||
+      state.output.status === "loading" ||
+      status?.stage === "ready" ||
+      status?.stage === "downloaded"
+    ) {
       return;
     }
 
-    setIsLocalModelLoading(true);
+    setActiveLocalModelId(modelId);
+    setLocalModelStatuses((current) => ({
+      ...current,
+      [modelId]: {
+        stage: "preparing",
+        message: "Preparing the browser download.",
+      },
+    }));
 
     try {
-      await preloadWebLLMModel(state.localModelId);
+      await preloadWebLLMModel(modelId);
+      dispatch({ type: "set_local_model", localModelId: modelId });
     } catch {
       // The downloader owns user-facing progress and error messages.
     } finally {
-      setIsLocalModelLoading(false);
+      setActiveLocalModelId(null);
     }
+  }
+
+  function selectLocalModel(modelId: string) {
+    const status = localModelStatuses[modelId];
+
+    if (!canUseLocalModel(status) || state.output.status === "loading") {
+      return;
+    }
+
+    dispatch({ type: "set_local_model", localModelId: modelId });
   }
 
   function submitDraft() {
@@ -506,27 +944,33 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
             <p className="eyebrow">Spicy-to-Nice</p>
             <h1>Feedback without the flames.</h1>
           </div>
-          <div className="provider-controls">
-            <div className="provider-field">
-              <label htmlFor="provider">Provider</label>
-              <select
-                id="provider"
-                value={state.provider}
-                disabled={state.output.status === "loading" || isLocalModelLoading}
-                onChange={(event) =>
-                  dispatch({ type: "set_provider", provider: event.target.value as Provider })
-                }
-              >
-                {providerConfigs.map((item) => (
-                  <option key={item.provider} value={item.provider}>
-                    {item.label}
-                    {item.implemented ? "" : " (soon)"}
-                  </option>
-                ))}
-              </select>
+        </header>
+
+        <section className="provider-toolbar" aria-label="Provider setup">
+          <div className="ai-control-group">
+            <span className="field-label">Provider</span>
+            <div className="provider-picker" role="group" aria-label="AI provider">
+              {visibleProviderConfigs.map((item) => (
+                <button
+                  className={state.provider === item.provider ? "active" : ""}
+                  key={item.provider}
+                  type="button"
+                  disabled={state.output.status === "loading" || activeLocalModelId !== null}
+                  onClick={() => {
+                    dispatch({ type: "set_provider", provider: item.provider });
+                    setIsModelSelectorOpen(false);
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <small>{getProviderDescription(item.provider)}</small>
+                </button>
+              ))}
             </div>
+          </div>
+
+          <div className="provider-detail">
             {selectedProvider?.requiresApiKey ? (
-              <div className="api-key-field">
+              <div className="api-key-field compact">
                 <label htmlFor="api-key">API key</label>
                 <input
                   id="api-key"
@@ -540,114 +984,44 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                <p>
-                  Key is kept in memory only and never saved. Use a restricted or
-                  revocable key when possible.
-                </p>
+                <p>Memory only. Never saved.</p>
               </div>
             ) : (
-              <div className="api-key-field">
-                <label htmlFor="local-model">Local model</label>
-                <select
-                  id="local-model"
-                  value={selectedLocalModel.id}
-                  disabled={state.output.status === "loading" || isLocalModelLoading}
-                  onChange={(event) =>
-                    dispatch({ type: "set_local_model", localModelId: event.target.value })
-                  }
-                >
-                  {supportedLocalModels.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.label} - {model.estimatedDownloadMB} MB
-                    </option>
-                  ))}
-                </select>
-                <p>Pick what runs in the browser. Nothing downloads until you load it.</p>
+              <div className="local-download-control">
+                <span className="field-label">Local models</span>
+                <div className="local-download-row">
+                  <select
+                    aria-label="Local model to download"
+                    value={localDownloadModel.id}
+                    disabled={state.output.status === "loading" || activeLocalModelId !== null}
+                    onChange={(event) => setLocalDownloadModelId(event.target.value)}
+                  >
+                    {supportedLocalModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label} - {model.estimatedDownloadMB} MB
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!canDownloadSelectedLocalModel}
+                    onClick={() => void downloadLocalModel(localDownloadModel.id)}
+                  >
+                    {getLocalDownloadButtonLabel(localDownloadStatus)}
+                  </button>
+                </div>
+                <p>{getTopbarLocalStatus(localDownloadModel.label, localDownloadStatus)}</p>
+                {typeof localDownloadProgress === "number" ? (
+                  <progress
+                    aria-label={`${localDownloadModel.label} download progress`}
+                    value={localDownloadProgress}
+                    max={1}
+                  />
+                ) : null}
               </div>
             )}
           </div>
-        </header>
-
-        {state.provider === "local" ? (
-          <section className="local-model-card" aria-label="Offline model setup">
-            <div>
-              <p className="eyebrow">Offline setup</p>
-              <h2>{selectedLocalModel.label}</h2>
-              <p>{selectedLocalModel.recommendedUse}</p>
-            </div>
-            <dl className="local-model-stats">
-              <div>
-                <dt>First download</dt>
-                <dd>{selectedLocalModel.estimatedDownloadMB} MB</dd>
-              </div>
-              <div>
-                <dt>GPU memory</dt>
-                <dd>{Math.round(selectedLocalModel.vramRequiredMB)} MB</dd>
-              </div>
-              <div>
-                <dt>Privacy</dt>
-                <dd>Runs in this browser</dd>
-              </div>
-            </dl>
-            <div className="local-model-actions">
-              <button
-                type="button"
-                disabled={
-                  state.output.status === "loading" ||
-                  isSelectedLocalModelReady ||
-                  isSelectedLocalModelBusy
-                }
-                onClick={() => void loadLocalModelNow()}
-              >
-                {isSelectedLocalModelReady
-                  ? "Model ready"
-                  : isSelectedLocalModelBusy
-                    ? "Loading..."
-                    : "Load model"}
-              </button>
-              <p>
-                Load it now to avoid waiting later. Generate will also load it automatically
-                when Offline is selected.
-              </p>
-            </div>
-            {selectedLocalProgress ? (
-              <div
-                className={`local-progress local-progress-${selectedLocalProgress.stage}`}
-                aria-live="polite"
-              >
-                <span>{selectedLocalProgress.message}</span>
-                {typeof selectedLocalProgress.progress === "number" ? (
-                  <progress value={selectedLocalProgress.progress} max={1} />
-                ) : null}
-              </div>
-            ) : (
-              <div className="local-progress" aria-live="polite">
-                <span>
-                  Ready when you are. This download starts only after Load model or Generate.
-                </span>
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        <div className="mode-switch" aria-label="Writing mode">
-          <button
-            className={state.mode === "single" ? "active" : ""}
-            type="button"
-            disabled={state.output.status === "loading"}
-            onClick={() => dispatch({ type: "switch_mode", mode: "single" })}
-          >
-            Standard
-          </button>
-          <button
-            className={state.mode === "ranting" ? "active" : ""}
-            type="button"
-            disabled={state.output.status === "loading"}
-            onClick={() => dispatch({ type: "switch_mode", mode: "ranting" })}
-          >
-            Ranting
-          </button>
-        </div>
+        </section>
 
         <section className="transcript-card" aria-label="Project notes">
           <div>
@@ -687,6 +1061,25 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
 
         <section className="grid">
           <div className={`input-panel ${state.mode === "ranting" ? "ranting-panel" : ""}`}>
+            <div className="mode-switch" aria-label="Writing mode">
+              <button
+                className={state.mode === "single" ? "active" : ""}
+                type="button"
+                disabled={state.output.status === "loading"}
+                onClick={() => dispatch({ type: "switch_mode", mode: "single" })}
+              >
+                Standard
+              </button>
+              <button
+                className={state.mode === "ranting" ? "active" : ""}
+                type="button"
+                disabled={state.output.status === "loading"}
+                onClick={() => dispatch({ type: "switch_mode", mode: "ranting" })}
+              >
+                Ranting
+              </button>
+            </div>
+
             <div className="input-heading">
               <span className="field-label">
                 {state.mode === "ranting" ? "Rant stream" : "Raw feedback"}
@@ -771,16 +1164,93 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
           </div>
 
           <aside className="settings-panel" aria-label="Output settings">
+            <div className="settings-panel-toolbar">
+              <span className="field-label">Output settings</span>
+              <div className="settings-menu">
+                <button
+                  aria-expanded={isSettingsOpen}
+                  aria-label="Generation settings"
+                  className="settings-button"
+                  type="button"
+                  onClick={() => {
+                    setIsModelSelectorOpen(false);
+                    setIsSettingsOpen((current) => !current);
+                  }}
+                >
+                  ⚙
+                </button>
+                {isSettingsOpen ? (
+                  <div className="settings-popover">
+                    <p>Settings</p>
+                    <section>
+                      <div className="settings-section-header">
+                        <span>System prompt</span>
+                        <button
+                          type="button"
+                          disabled={
+                            state.output.status === "loading" ||
+                            state.systemPrompt === defaultEditableSystemPrompt
+                          }
+                          onClick={() => dispatch({ type: "reset_system_prompt" })}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <textarea
+                        className="prompt-editor"
+                        value={state.systemPrompt}
+                        disabled={state.output.status === "loading"}
+                        rows={5}
+                        onChange={(event) =>
+                          dispatch({
+                            type: "set_system_prompt",
+                            systemPrompt: event.target.value,
+                          })
+                        }
+                      />
+                      <small>
+                        These rewrite preferences are sent with the prompt. The app still enforces
+                        the output format and factuality rules.
+                      </small>
+                    </section>
+                    <section>
+                      <span>OpenAI reasoning</span>
+                      <small>Used for hosted OpenAI models. Local models ignore this.</small>
+                      <div className="reasoning-grid">
+                        {reasoningOptions.map((option) => (
+                          <button
+                            className={state.reasoningEffort === option.id ? "active" : ""}
+                            disabled={state.output.status === "loading"}
+                            key={option.id}
+                            title={option.description}
+                            type="button"
+                            onClick={() =>
+                              dispatch({
+                                type: "set_reasoning_effort",
+                                reasoningEffort: option.id,
+                              })
+                            }
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             <div>
               <span className="field-label">Audience</span>
               <div className="choice-grid">
-                {audiences.map((item) => (
+                {audienceOptions.map((item) => (
                   <button
-                    className={state.audience === item.value ? "active" : ""}
-                    key={item.value}
+                    className={state.audience === item.id ? "active" : ""}
+                    key={item.id}
                     type="button"
                     disabled={state.output.status === "loading"}
-                    onClick={() => dispatch({ type: "set_audience", audience: item.value })}
+                    onClick={() => dispatch({ type: "set_audience", audience: item.id })}
                   >
                     {item.label}
                   </button>
@@ -791,13 +1261,13 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
             <div>
               <span className="field-label">Tone</span>
               <div className="choice-grid">
-                {tones.map((item) => (
+                {toneOptions.map((item) => (
                   <button
-                    className={state.tone === item.value ? "active" : ""}
-                    key={item.value}
+                    className={state.tone === item.id ? "active" : ""}
+                    key={item.id}
                     type="button"
                     disabled={state.output.status === "loading"}
-                    onClick={() => dispatch({ type: "set_tone", tone: item.value })}
+                    onClick={() => dispatch({ type: "set_tone", tone: item.id })}
                   >
                     {item.label}
                   </button>
@@ -816,9 +1286,34 @@ function TranslatorApp({ onOpenConversation }: TranslatorAppProps) {
               <p className="eyebrow">Polished draft</p>
               <h2>{state.mode === "ranting" ? "Final combined feedback" : "Ready to send"}</h2>
             </div>
-            <button type="button" onClick={() => void generate()} disabled={!canGenerate}>
-              {state.output.status === "loading" ? "Generating..." : "Generate"}
-            </button>
+            <div className="generation-controls">
+              <ModelSelector
+                disabled={state.output.status === "loading" || modelSelectorOptions.length === 0}
+                hint={activeModelHint}
+                isOpen={isModelSelectorOpen}
+                label={activeModelLabel}
+                options={modelSelectorOptions}
+                selectedId={selectedModelId}
+                onSelect={(modelId) => {
+                  if (getHostedModel(modelId)) {
+                    dispatch({ type: "set_provider", provider: "openai" });
+                    dispatch({ type: "set_hosted_model", hostedModelId: modelId });
+                  } else {
+                    dispatch({ type: "set_provider", provider: "local" });
+                    selectLocalModel(modelId);
+                  }
+
+                  setIsModelSelectorOpen(false);
+                }}
+                onToggle={() => {
+                  setIsSettingsOpen(false);
+                  setIsModelSelectorOpen((current) => !current);
+                }}
+              />
+              <button type="button" onClick={() => void generate()} disabled={!canGenerate}>
+                {state.output.status === "loading" ? "Generating..." : "Generate"}
+              </button>
+            </div>
           </div>
           {generationBlocker && state.output.status !== "loading" ? (
             <p className="notice">{generationBlocker}</p>

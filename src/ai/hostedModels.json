@@ -1,0 +1,15 @@
+[
+  {
+    "id": "gpt-5-mini",
+    "label": "GPT-5 mini",
+    "provider": "openai",
+    "description": "Default hosted rewrite model.",
+    "default": true
+  },
+  {
+    "id": "gpt-5-nano",
+    "label": "GPT-5 nano",
+    "provider": "openai",
+    "description": "Lower-cost option for quick rewrites."
+  }
+]

@@ -13,6 +13,15 @@ Reasons:
 
 Styling should start with plain CSS or CSS modules. Avoid adding a heavy component framework until the frontend direction is clearer.
 
+## Config-Driven Workflow Controls
+
+The rewrite workflow should avoid hardcoded product choices where possible:
+
+- `src/config/feedbackConfig.json` owns audience choices, tone choices, OpenAI reasoning options, and the default editable system prompt.
+- `src/config/feedbackConfig.ts` validates that JSON and exports typed option arrays plus default IDs.
+- Prompt builders read audience and tone prompt snippets from config, so product changes can be made without editing React components or provider adapters.
+- TypeScript keeps these IDs as strings for now; generated literal types can come later if the config becomes stable.
+
 ## Deployment Target
 
 The app should be deployable as a static site.

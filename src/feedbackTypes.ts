@@ -1,10 +1,12 @@
 export type FeedbackMode = "single" | "ranting";
 
-export type Audience = "manager" | "direct_report" | "peer" | "customer";
+export type Audience = string;
 
-export type Tone = "diplomatic" | "warm" | "firm" | "concise";
+export type Tone = string;
 
 export type Provider = "openai" | "gemini" | "anthropic" | "local";
+
+export type ReasoningEffort = string;
 
 export interface ProviderConfig {
   provider: Provider;
@@ -20,6 +22,9 @@ export interface GenerateFeedbackInput {
   tone: Tone;
   provider: Provider;
   apiKey?: string;
+  modelId?: string;
+  reasoningEffort?: ReasoningEffort;
+  systemPrompt?: string;
   localModelId?: string;
 }
 

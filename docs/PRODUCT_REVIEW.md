@@ -48,9 +48,9 @@ Local WebLLM adapter
 
 ## UX Gaps To Close Next
 
-- Add an explicit Offline provider loading panel.
-- Keep the local-model picker visible when Offline is selected, but do not download anything until the user explicitly generates/loads.
-- Add a demo/sample-rant button for recruiters who do not have an API key ready.
+- Keep refining the top-bar local model download copy after testing a real first-run download.
+- Consider a one-click sample rant for recruiters who do not have an API key or local model ready.
+- Add persistent user preferences later if we decide model/provider defaults should survive refresh.
 - Add clearer quota/billing guidance for OpenAI key errors.
 - Add a small model bakeoff set with saved examples and expected qualities.
 

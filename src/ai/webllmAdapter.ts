@@ -4,12 +4,17 @@ import type {
 } from "@mlc-ai/web-llm";
 import type { GenerateFeedbackOutput } from "../feedbackTypes";
 import { FeedbackGenerationError } from "./errors";
-import { parseFeedbackResponseText } from "./feedbackResponse";
+import { createSingleVariantOutput, parseFeedbackResponseText } from "./feedbackResponse";
 import { llmDownloader } from "./llmDownloader";
-import { buildFeedbackPrompt, feedbackResponseSchema } from "./prompt";
+import {
+  buildFeedbackPrompt,
+  buildTinyLocalFeedbackPrompt,
+  feedbackResponseSchema,
+} from "./prompt";
 import type { NormalizedGenerateFeedbackInput } from "./providerAdapters";
 
 const MAX_LOCAL_OUTPUT_TOKENS = 620;
+const MAX_TINY_LOCAL_OUTPUT_TOKENS = 220;
 const LOCAL_TEMPERATURE = 0.3;
 
 type EngineEntry = {
@@ -22,7 +27,12 @@ let engineEntry: EngineEntry | null = null;
 export async function generateWithWebLLM(
   input: NormalizedGenerateFeedbackInput,
 ): Promise<GenerateFeedbackOutput> {
-  const { engine } = await getLocalEngine(input.localModelId);
+  const { engine, model } = await getLocalEngine(input.localModelId);
+
+  if (model.sizeClass === "tiny") {
+    return generateTinyLocalFeedback(engine, input);
+  }
+
   const prompt = buildFeedbackPrompt(input);
   const localInstructions = [
     prompt.instructions,
@@ -50,6 +60,51 @@ export async function generateWithWebLLM(
     }
 
     return parseFeedbackResponseText(responseText);
+  } catch (error) {
+    throw normalizeLocalGenerationError(error);
+  }
+}
+
+async function generateTinyLocalFeedback(
+  engine: MLCEngineInterface,
+  input: NormalizedGenerateFeedbackInput,
+): Promise<GenerateFeedbackOutput> {
+  const prompt = buildTinyLocalFeedbackPrompt(input);
+
+  try {
+    const response = await engine.chat.completions.create({
+      messages: [
+        { role: "system", content: prompt.instructions },
+        { role: "user", content: prompt.input },
+      ],
+      temperature: 0.2,
+      max_tokens: MAX_TINY_LOCAL_OUTPUT_TOKENS,
+      stream: false,
+    });
+
+    const responseText = response.choices[0]?.message.content?.trim() ?? "";
+
+    if (!responseText) {
+      throw new FeedbackGenerationError(
+        "The local model returned an empty response. Try again with more context or use OpenAI.",
+      );
+    }
+
+    if (responseText.split(/\s+/).filter(Boolean).length < 6) {
+      throw new FeedbackGenerationError(
+        "The tiny local model returned too little usable feedback. Try a larger local model or switch to OpenAI.",
+      );
+    }
+
+    const output = createSingleVariantOutput(responseText);
+
+    return {
+      ...output,
+      warnings: [
+        ...(output.warnings ?? []),
+        "Tiny offline models return one balanced draft. Use OpenAI or a larger local model for stronger nuance and variants.",
+      ],
+    };
   } catch (error) {
     throw normalizeLocalGenerationError(error);
   }

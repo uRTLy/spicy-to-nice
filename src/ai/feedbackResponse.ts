@@ -131,15 +131,21 @@ function stripCodeFence(value: string) {
 }
 
 function cleanGeneratedText(text: string) {
-  return text.trim().replace(/^(?:here(?:'s| is)|sure[:,]?)\s+/i, "").trim();
+  return text
+    .trim()
+    .replace(/^(?:here(?:'s| is)|sure[:,]?|polite rewrite:|rewrite:)\s+/i, "")
+    .trim();
 }
 
 function assertDirectRewrite(text: string) {
   const badPatterns = [
+    /<\s*segment\b/i,
+    /\b(?:text|label|useCase)\s*=\s*["']/i,
     /\bI will now\b/i,
     /\braw (?:text|input|segments?)\b/i,
     /\bUser\s*\d+\s*:/i,
     /\bsegment\s*\d+\s*:/i,
+    /\b(?:fuck(?:er|ing)?|shit|bullshit|asshole|idiot)\b/i,
   ];
 
   if (badPatterns.some((pattern) => pattern.test(text))) {

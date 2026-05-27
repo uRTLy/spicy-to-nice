@@ -7,17 +7,9 @@ This document captures the planned internal API shape. It is intentionally light
 ```ts
 export type FeedbackMode = "single" | "ranting";
 
-export type Audience =
-  | "manager"
-  | "direct_report"
-  | "peer"
-  | "customer";
+export type Audience = string;
 
-export type Tone =
-  | "diplomatic"
-  | "warm"
-  | "firm"
-  | "concise";
+export type Tone = string;
 
 export type Provider =
   | "openai"
@@ -39,6 +31,9 @@ export interface GenerateFeedbackInput {
   tone: Tone;
   provider: Provider;
   apiKey?: string;
+  modelId?: string;
+  reasoningEffort?: string;
+  systemPrompt?: string;
   localModelId?: string;
 }
 
@@ -73,9 +68,17 @@ Provider-specific implementation details should live behind adapters:
 - `anthropicAdapter`
 - `localWebLLMAdapter`
 
-The prompt builder should be separate from both the UI and provider adapters. Local model selection should read from `src/ai/localModels.json`, not hardcoded strings in components.
+The prompt builder should be separate from both the UI and provider adapters. Audience, tone, default rewrite preferences, and OpenAI reasoning controls should read from `src/config/feedbackConfig.json`. Local model selection should read from `src/ai/localModels.json`, not hardcoded strings in components.
 
 The first hosted working adapter is OpenAI. Offline WebLLM also uses this interface. Gemini and Anthropic should keep the same interface and can be added without changing UI state shape.
+
+## Feedback Configuration
+
+Rewrite controls are config-driven:
+
+- `src/config/feedbackConfig.json` stores audience IDs, tone IDs, labels, prompt snippets, reasoning options, and defaults.
+- `src/config/feedbackConfig.ts` validates the JSON once at module load and exports safe option arrays for React.
+- `Audience`, `Tone`, and `ReasoningEffort` stay conservative `string` IDs for now, because the app reads them from runtime JSON. Literal types can be generated later if config stability becomes more important than editability.
 
 ## Local Model Download Abstraction
 
@@ -102,7 +105,7 @@ The prompt builder should:
 
 - Combine `segments` into one coherent source text.
 - Explain whether the user used Standard Mode or Ranting Mode.
-- Include the intended audience and tone.
+- Include the configured prompt snippets for the intended audience and tone.
 - Ask the model to preserve the core message.
 - Ask the model to remove insults, emotional excess, and unclear phrasing.
 - Ask the model not to invent facts.
