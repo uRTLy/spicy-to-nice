@@ -13,7 +13,15 @@ The first version should stay intentionally simple:
 - Generate a polished feedback draft.
 - Support a special Ranting Mode for collecting multiple stream-of-thought messages before generating one final response.
 
-The frontend design is still intentionally open. This repository starts with the technical foundation and product docs, not a finished UI.
+The current prototype is a working static app with a polished input flow, real OpenAI BYOK generation, and an experimental browser-local WebLLM mode.
+
+## Live Demo
+
+- App: https://urtly.github.io/spicy-to-nice/
+- Project notes / sanitized build transcript: https://urtly.github.io/spicy-to-nice/#/conversation
+- Repository: https://github.com/uRTLy/spicy-to-nice
+
+The hosted demo does not include an API key. To test hosted generation, paste a temporary OpenAI API key into **AI setup**. The key is held in memory only and clears on refresh.
 
 ## Planned Stack
 
@@ -38,30 +46,55 @@ Future options:
 ## Repository Structure
 
 ```text
+.github/workflows/
+  deploy-pages.yml
 docs/
   AI-team-take-home-test.pdf
   API_SKETCH.md
+  CONVERSATION_EXPORT.md
   LLM_OUTPUT_PATTERNS.md
   PRODUCT_IDEA.md
   PRODUCT_REVIEW.md
   TECH_PLAN.md
   WEBLLM_PLAN.md
+public/
+  transcript/
 src/
   App.tsx
+  ai/
   config/
     feedbackConfig.json
     feedbackConfig.ts
+  features/translator/
   main.tsx
 ```
 
 ## Local Development
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run dev -- --host 127.0.0.1
 ```
 
 For local testing, open the Vite URL, paste a temporary provider key into the API key field, and try both Standard Mode and Ranting Mode. The app keeps the key in memory only, so refreshing the page clears it.
+
+## Demo Script
+
+1. Open the app and choose **Standard** mode.
+2. Paste a frustrated feedback message.
+3. Open **AI setup**, keep **OpenAI** selected, and paste a temporary API key.
+4. Choose an audience and tone.
+5. Generate, compare the Before/After cards, switch variants, and copy the result.
+6. Switch to **Ranting** mode, press Enter after each thought, then Generate once to combine the thread.
+7. Open **How this was built** to review the sanitized collaboration log.
+
+Example input:
+
+```text
+This launch process is a mess. We keep finding blockers at the last minute because nobody is writing down owners or deadlines. I need the team to stop treating QA feedback like an interruption and actually close the loop before launch week.
+```
+
+Offline mode can be tested without a provider key, but it requires a WebGPU-capable browser and a first-run model download.
 
 ## Current Prototype
 
@@ -78,7 +111,17 @@ For local testing, open the Vite URL, paste a temporary provider key into the AP
 - Tiny local models use a simpler one-draft prompt; larger local or hosted models can return multiple variants.
 - Audience, tone, reasoning options, and default rewrite preferences are loaded from `src/config/feedbackConfig.json`.
 - Hosted model options live in `src/ai/hostedModels.json`; browser-local model options live in `src/ai/localModels.json`.
-- Sanitized project notes are available at `/conversation` inside the running app.
+- Sanitized project notes are available at `#/conversation` inside the running app.
+
+## Deployment
+
+The app deploys to GitHub Pages from `main` through `.github/workflows/deploy-pages.yml`.
+
+```bash
+npm run build
+```
+
+Production builds use Vite's `/spicy-to-nice/` base path for GitHub Pages. Local dev keeps `/` as the base path.
 
 ## Conversation Export
 

@@ -5,7 +5,10 @@ import { TranslatorPage } from "./features/translator/TranslatorPage";
 type AppRoute = "translator" | "conversation";
 
 function readRoute(): AppRoute {
-  return window.location.pathname.replace(/\/+$/, "").endsWith("/conversation")
+  const hashRoute = window.location.hash.replace(/^#\/?/, "").replace(/\/+$/, "");
+  const pathRoute = window.location.pathname.replace(/\/+$/, "");
+
+  return hashRoute === "conversation" || pathRoute.endsWith("/conversation")
     ? "conversation"
     : "translator";
 }
@@ -17,7 +20,7 @@ function buildRoutePath(route: AppRoute) {
     return base;
   }
 
-  return `${base}${base.endsWith("/") ? "" : "/"}conversation`;
+  return `${base}#/conversation`;
 }
 
 export function App() {
@@ -27,7 +30,12 @@ export function App() {
     const handlePopState = () => setRoute(readRoute());
 
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handlePopState);
+    };
   }, []);
 
   function navigate(routeName: AppRoute) {
